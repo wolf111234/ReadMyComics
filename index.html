@@ -4,10 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Карта глубин</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Inter', system-ui, sans-serif;
             background: #0d0d0d;
             color: #e0e0e0;
             min-height: 100vh;
@@ -21,15 +23,22 @@
             top: 0;
             left: 0;
             right: 0;
-            background: linear-gradient(180deg, rgba(13,13,13,0.95) 0%, rgba(13,13,13,0) 100%);
+            background: linear-gradient(180deg, rgba(13,13,13,0.97) 0%, rgba(13,13,13,0) 100%);
             padding: 16px 40px 24px;
             z-index: 100;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .header.hidden {
+            transform: translateY(-100%);
+        }
+        .header.show {
+            transform: translateY(0);
         }
         .title {
-            font-size: 28px;
-            font-weight: 700;
+            font-size: 26px;
+            font-weight: 800;
             text-align: center;
-            letter-spacing: 4px;
+            letter-spacing: 6px;
             text-transform: uppercase;
             background: linear-gradient(135deg, #00d4ff 0%, #7b2cbf 50%, #ff006e 100%);
             -webkit-background-clip: text;
@@ -51,13 +60,14 @@
             border-radius: 25px;
             cursor: pointer;
             font-size: 13px;
+            font-weight: 600;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            transition: transform 0.2s;
+            transition: transform 0.2s, box-shadow 0.2s;
         }
-        .download-btn:hover { transform: scale(1.05); }
+        .download-btn:hover { transform: scale(1.05); box-shadow: 0 0 20px rgba(0,212,255,0.4); }
         .volumes {
             display: flex;
             justify-content: center;
@@ -71,7 +81,8 @@
             border: 1px solid rgba(255,255,255,0.1);
             padding: 6px 16px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 12px;
+            font-weight: 600;
             border-radius: 25px;
             transition: all 0.3s ease;
         }
@@ -99,6 +110,7 @@
             padding: 6px 14px;
             cursor: pointer;
             font-size: 12px;
+            font-weight: 400;
             border-radius: 25px;
             transition: all 0.3s ease;
         }
@@ -111,6 +123,7 @@
             background: linear-gradient(135deg, #00d4ff, #7b2cbf);
             border-color: transparent;
             color: #fff;
+            font-weight: 600;
         }
         .chapter-btn.locked {
             opacity: 0.4;
@@ -123,20 +136,21 @@
             border-radius: 10px;
             color: #ff006e;
             margin-left: 4px;
+            font-weight: 600;
         }
         .content {
             max-width: 700px;
             margin: 0 auto;
-            padding: 180px 20px 60px;
+            padding: 140px 20px 60px;
         }
         .chapter-header { text-align: center; margin-bottom: 30px; }
-        .chapter-title { font-size: 24px; color: #00d4ff; font-weight: 300; letter-spacing: 2px; }
+        .chapter-title { font-size: 22px; color: #00d4ff; font-weight: 300; letter-spacing: 3px; }
         .release-info { margin-top: 15px; color: #ff006e; font-size: 14px; }
-        .countdown { font-size: 20px; font-weight: bold; margin-top: 8px; }
+        .countdown { font-size: 22px; font-weight: 700; margin-top: 8px; letter-spacing: 2px; }
         .page {
             margin-bottom: 20px;
             opacity: 0;
-            transform: translateY(20px);
+            transform: translateY(24px);
             animation: fadeIn 0.6s ease forwards;
         }
         .page:nth-child(2) { animation-delay: 0.1s; }
@@ -150,8 +164,8 @@
             box-shadow: 0 10px 40px rgba(0,0,0,0.5);
             cursor: zoom-in;
         }
-        .page-image:hover { box-shadow: 0 15px 50px rgba(0,212,255,0.2); }
-        .page-number { text-align: center; color: #555; font-size: 12px; margin-top: 8px; }
+        .page-image:hover { box-shadow: 0 15px 50px rgba(0,212,255,0.15); }
+        .page-number { text-align: center; color: #555; font-size: 12px; margin-top: 8px; letter-spacing: 1px; }
         .zoom-overlay {
             display: none; position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -163,12 +177,12 @@
         .close-zoom {
             position: fixed; top: 20px; right: 20px;
             background: rgba(255,0,0,0.3); color: #fff; border: none;
-            padding: 10px 20px; cursor: pointer; border-radius: 25px;
+            padding: 10px 20px; cursor: pointer; border-radius: 25px; font-weight: 600;
         }
     </style>
 </head>
 <body>
-    <div class="header">
+    <div class="header" id="header">
         <h1 class="title">Карта глубин</h1>
         <div class="header-actions">
             <a class="download-btn" href="KartaGlubin.apk" download>📱 Скачать приложение</a>
@@ -197,11 +211,23 @@
 
         let currentVolume = 1;
         let currentChapter = Object.keys(volumes[1].chapters)[0];
-        let timerStart = localStorage.getItem('timer_start');
-        if (!timerStart) {
-            timerStart = Date.now();
-            localStorage.setItem('timer_start', timerStart);
-        }
+        let lastScroll = 0;
+        let headerVisible = true;
+
+        window.addEventListener('scroll', () => {
+            const currentScroll = window.pageYOffset;
+            const header = document.getElementById('header');
+            if (currentScroll > 80 && currentScroll > lastScroll && headerVisible) {
+                header.classList.add('hidden');
+                header.classList.remove('show');
+                headerVisible = false;
+            } else if ((currentScroll < lastScroll || currentScroll < 80) && !headerVisible) {
+                header.classList.remove('hidden');
+                header.classList.add('show');
+                headerVisible = true;
+            }
+            lastScroll = currentScroll;
+        });
 
         function getRemaining(releaseDate) {
             const now = new Date();

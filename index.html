@@ -39,7 +39,6 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            text-shadow: 0 0 30px rgba(0,212,255,0.3);
         }
         .chapters {
             display: flex;
@@ -58,6 +57,9 @@
             border-radius: 25px;
             transition: all 0.3s ease;
             backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .chapter-btn:hover {
             background: rgba(0,212,255,0.1);
@@ -70,18 +72,46 @@
             color: #fff;
             box-shadow: 0 0 20px rgba(0,212,255,0.4);
         }
+        .chapter-btn.locked {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .chapter-btn.locked:hover {
+            background: rgba(255,255,255,0.05);
+            border-color: rgba(255,255,255,0.1);
+        }
+        .timer {
+            font-size: 11px;
+            background: rgba(255,0,100,0.2);
+            padding: 2px 8px;
+            border-radius: 10px;
+            color: #ff006e;
+        }
         .content {
             max-width: 700px;
             margin: 0 auto;
             padding: 140px 20px 60px;
         }
+        .chapter-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
         .chapter-title {
             font-size: 24px;
             color: #00d4ff;
-            margin-bottom: 30px;
-            text-align: center;
             font-weight: 300;
             letter-spacing: 2px;
+        }
+        .release-info {
+            margin-top: 15px;
+            color: #ff006e;
+            font-size: 14px;
+        }
+        .countdown {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 8px;
+            color: #ff006e;
         }
         .page {
             margin-bottom: 20px;
@@ -93,10 +123,7 @@
         .page:nth-child(3) { animation-delay: 0.2s; }
         .page:nth-child(4) { animation-delay: 0.3s; }
         @keyframes fadeIn {
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            to { opacity: 1; transform: translateY(0); }
         }
         .page-image {
             width: 100%;
@@ -104,7 +131,6 @@
             border-radius: 8px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.5);
             cursor: zoom-in;
-            transition: transform 0.2s ease;
         }
         .page-image:hover {
             box-shadow: 0 15px 50px rgba(0,212,255,0.2);
@@ -114,24 +140,17 @@
             color: #555;
             font-size: 12px;
             margin-top: 8px;
-            letter-spacing: 1px;
         }
         
         .zoom-overlay {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
+            top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.95);
             z-index: 200;
             overflow: auto;
-            cursor: zoom-out;
         }
-        .zoom-overlay.active {
-            display: block;
-        }
+        .zoom-overlay.active { display: block; }
         .zoom-container {
             min-height: 100vh;
             display: flex;
@@ -142,21 +161,6 @@
         .zoom-image {
             max-width: 100%;
             cursor: move;
-            transform-origin: center center;
-            transition: transform 0.1s ease;
-        }
-        .zoom-hint {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,212,255,0.2);
-            color: #00d4ff;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 14px;
-            z-index: 201;
-            border: 1px solid rgba(0,212,255,0.4);
         }
         .close-zoom {
             position: fixed;
@@ -164,15 +168,10 @@
             right: 20px;
             background: rgba(255,0,0,0.3);
             color: #fff;
-            border: 1px solid rgba(255,0,0,0.5);
+            border: none;
             padding: 10px 20px;
             cursor: pointer;
             border-radius: 25px;
-            font-size: 16px;
-            z-index: 201;
-        }
-        .close-zoom:hover {
-            background: rgba(255,0,0,0.5);
         }
     </style>
 </head>
@@ -186,14 +185,14 @@
     
     <div class="zoom-overlay" id="zoomOverlay">
         <button class="close-zoom" onclick="closeZoom()">✕ Закрыть</button>
-        <div class="zoom-container" id="zoomContainer">
-            <img class="zoom-image" id="zoomImage" src="" alt="Увеличенное изображение">
+        <div class="zoom-container">
+            <img class="zoom-image" id="zoomImage" src="" alt="">
         </div>
-        <div class="zoom-hint">Кликни вне изображения или нажми Esc для закрытия</div>
     </div>
 
     <script>
         let chapters = {};
+        
         async function loadChapters() {
             try {
                 const response = await fetch('chapters.json');
@@ -202,33 +201,86 @@
                 chapters = {"1": {"title": "Глава 1", "pages": ["Glava1/1.png", "Glava1/2.png"]}};
             }
             init();
+            updateTimers();
+            setInterval(updateTimers, 60000);
+        }
+
+        function getDaysRemaining(releaseDate) {
+            const now = new Date();
+            const release = new Date(releaseDate);
+            const diff = release - now;
+            if (diff <= 0) return null;
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            return { days, hours, total: diff };
+        }
+
+        function formatCountdown(releaseDate) {
+            const remaining = getDaysRemaining(releaseDate);
+            if (!remaining) return null;
+            if (remaining.days > 0) {
+                return `${remaining.days}д ${remaining.hours}ч`;
+            }
+            return `${remaining.hours}ч`;
+        }
+
+        function isChapterLocked(chapter) {
+            return chapter.pages.length === 0 && chapter.releaseDate;
         }
 
         function showChapter(chapterNum) {
             document.querySelectorAll(".chapter-btn").forEach((btn) => {
-                btn.classList.toggle("active", btn.textContent.includes(chapterNum));
+                btn.classList.toggle("active", btn.dataset.chapter == chapterNum);
             });
 
             const chapter = chapters[chapterNum];
             const content = document.getElementById("content");
             
-            content.innerHTML = `<h2 class="chapter-title">${chapter.title}</h2>`;
-            
-            chapter.pages.forEach((page, index) => {
-                content.innerHTML += `
-                    <div class="page">
-                        <img class="page-image" src="${page}" alt="Страница ${index + 1}" onclick="openZoom('${page}')">
-                        <div class="page-number">Страница ${index + 1}</div>
+            if (isChapterLocked(chapter)) {
+                const remaining = getDaysRemaining(chapter.releaseDate);
+                content.innerHTML = `
+                    <div class="chapter-header">
+                        <h2 class="chapter-title">${chapter.title}</h2>
+                        <div class="release-info">
+                            <div>Скоро ближайший выход:</div>
+                            <div class="countdown">${formatCountdown(chapter.releaseDate)}</div>
+                        </div>
                     </div>
                 `;
+            } else {
+                content.innerHTML = `<div class="chapter-header">
+                    <h2 class="chapter-title">${chapter.title}</h2>
+                </div>`;
+                
+                chapter.pages.forEach((page, index) => {
+                    content.innerHTML += `
+                        <div class="page">
+                            <img class="page-image" src="${page}" alt="Страница ${index + 1}" onclick="openZoom('${page}')">
+                            <div class="page-number">Страница ${index + 1}</div>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        function updateTimers() {
+            document.querySelectorAll('.chapter-btn').forEach(btn => {
+                const num = btn.dataset.chapter;
+                const chapter = chapters[num];
+                const timerEl = btn.querySelector('.timer');
+                
+                if (chapter.releaseDate && isChapterLocked(chapter)) {
+                    const countdown = formatCountdown(chapter.releaseDate);
+                    if (timerEl) {
+                        timerEl.textContent = countdown;
+                    }
+                }
             });
         }
 
         function openZoom(src) {
-            const overlay = document.getElementById('zoomOverlay');
-            const img = document.getElementById('zoomImage');
-            img.src = src;
-            overlay.classList.add('active');
+            document.getElementById('zoomImage').src = src;
+            document.getElementById('zoomOverlay').classList.add('active');
             document.body.style.overflow = 'hidden';
         }
 
@@ -241,46 +293,19 @@
             if (e.key === 'Escape') closeZoom();
         });
 
-        document.getElementById('zoomOverlay').addEventListener('click', (e) => {
-            if (e.target.id === 'zoomOverlay') closeZoom();
-        });
-
-        const zoomImg = document.getElementById('zoomImage');
-        let scale = 1;
-        let isDragging = false;
-        let startX, startY, translateX = 0, translateY = 0;
-
-        zoomImg.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            scale += e.deltaY > 0 ? -0.1 : 0.1;
-            scale = Math.min(Math.max(1, scale), 4);
-            zoomImg.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
-        });
-
-        zoomImg.addEventListener('mousedown', (e) => {
-            if (scale > 1) {
-                isDragging = true;
-                startX = e.clientX - translateX;
-                startY = e.clientY - translateY;
-            }
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (isDragging && scale > 1) {
-                translateX = e.clientX - startX;
-                translateY = e.clientY - startY;
-                zoomImg.style.transform = `scale(${scale}) translate(${translateX}px, ${translateY}px)`;
-            }
-        });
-
-        document.addEventListener('mouseup', () => {
-            isDragging = false;
-        });
-
         function init() {
-            const chaptersContainer = document.getElementById("chapters");
+            const container = document.getElementById("chapters");
             Object.keys(chapters).sort((a,b) => a-b).forEach(num => {
-                chaptersContainer.innerHTML += `<button class="chapter-btn" onclick="showChapter(${num})">Глава ${num}</button>`;
+                const chapter = chapters[num];
+                let btnClass = 'chapter-btn';
+                let timerHtml = '';
+                
+                if (isChapterLocked(chapter)) {
+                    btnClass += ' locked';
+                    timerHtml = `<span class="timer">${formatCountdown(chapter.releaseDate)}</span>`;
+                }
+                
+                container.innerHTML += `<button class="${btnClass}" data-chapter="${num}" onclick="showChapter(${num})">Глава ${num}${timerHtml}</button>`;
             });
             showChapter(1);
         }

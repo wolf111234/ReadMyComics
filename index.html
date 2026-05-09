@@ -172,21 +172,30 @@
         };
         
         let currentChapter = 1;
+        let timerStart = localStorage.getItem('timer_start');
+        if (!timerStart) {
+            timerStart = Date.now();
+            localStorage.setItem('timer_start', timerStart);
+        }
 
-        function getDaysRemaining(releaseDate) {
+        function getRemaining(releaseDate) {
             const now = new Date();
             const release = new Date(releaseDate);
             const diff = release - now;
             if (diff <= 0) return null;
             const days = Math.floor(diff / (1000 * 60 * 60 * 24));
             const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            return { days, hours };
+            const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const secs = Math.floor((diff % (1000 * 60)) / 1000);
+            return { days, hours, mins, secs, total: diff };
         }
 
         function formatCountdown(releaseDate) {
-            const remaining = getDaysRemaining(releaseDate);
-            if (!remaining) return "Доступно!";
-            return `${remaining.days}д ${remaining.hours}ч`;
+            const r = getRemaining(releaseDate);
+            if (!r) return "Доступно!";
+            if (r.days > 0) return `${r.days}д ${r.hours}ч ${r.mins}м`;
+            if (r.hours > 0) return `${r.hours}ч ${r.mins}м ${r.secs}с`;
+            return `${r.mins}м ${r.secs}с`;
         }
 
         function isChapterLocked(chapter) {
@@ -270,7 +279,7 @@
                 container.innerHTML += `<button class="${btnClass}" data-chapter="${num}" onclick="showChapter(${num})">Глава ${num}${timerHtml}</button>`;
             });
             showChapter(1);
-            setInterval(updateTimers, 60000);
+            setInterval(updateTimers, 1000);
             updateTimers();
         }
 

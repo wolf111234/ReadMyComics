@@ -5,11 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Карта глубин</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: #0d0d0d;
@@ -57,9 +53,6 @@
             border-radius: 25px;
             transition: all 0.3s ease;
             backdrop-filter: blur(10px);
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
         .chapter-btn:hover {
             background: rgba(0,212,255,0.1);
@@ -76,10 +69,6 @@
             opacity: 0.5;
             cursor: not-allowed;
         }
-        .chapter-btn.locked:hover {
-            background: rgba(255,255,255,0.05);
-            border-color: rgba(255,255,255,0.1);
-        }
         .timer {
             font-size: 11px;
             background: rgba(255,0,100,0.2);
@@ -92,10 +81,7 @@
             margin: 0 auto;
             padding: 140px 20px 60px;
         }
-        .chapter-header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
+        .chapter-header { text-align: center; margin-bottom: 30px; }
         .chapter-title {
             font-size: 24px;
             color: #00d4ff;
@@ -108,10 +94,9 @@
             font-size: 14px;
         }
         .countdown {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: bold;
             margin-top: 8px;
-            color: #ff006e;
         }
         .page {
             margin-bottom: 20px;
@@ -122,9 +107,7 @@
         .page:nth-child(2) { animation-delay: 0.1s; }
         .page:nth-child(3) { animation-delay: 0.2s; }
         .page:nth-child(4) { animation-delay: 0.3s; }
-        @keyframes fadeIn {
-            to { opacity: 1; transform: translateY(0); }
-        }
+        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
         .page-image {
             width: 100%;
             display: block;
@@ -132,16 +115,13 @@
             box-shadow: 0 10px 40px rgba(0,0,0,0.5);
             cursor: zoom-in;
         }
-        .page-image:hover {
-            box-shadow: 0 15px 50px rgba(0,212,255,0.2);
-        }
+        .page-image:hover { box-shadow: 0 15px 50px rgba(0,212,255,0.2); }
         .page-number {
             text-align: center;
             color: #555;
             font-size: 12px;
             margin-top: 8px;
         }
-        
         .zoom-overlay {
             display: none;
             position: fixed;
@@ -158,10 +138,7 @@
             align-items: center;
             padding: 40px 20px;
         }
-        .zoom-image {
-            max-width: 100%;
-            cursor: move;
-        }
+        .zoom-image { max-width: 100%; cursor: move; }
         .close-zoom {
             position: fixed;
             top: 20px;
@@ -180,9 +157,7 @@
         <h1 class="title">Карта глубин</h1>
         <div class="chapters" id="chapters"></div>
     </div>
-    
     <div class="content" id="content"></div>
-    
     <div class="zoom-overlay" id="zoomOverlay">
         <button class="close-zoom" onclick="closeZoom()">✕ Закрыть</button>
         <div class="zoom-container">
@@ -191,19 +166,12 @@
     </div>
 
     <script>
-        let chapters = {};
+        const chapters = {
+            "1": { "title": "Глава 1", "pages": ["Glava1/1.png", "Glava1/2.png", "Glava1/3.png"] },
+            "2": { "title": "Глава 2", "releaseDate": "2026-05-17T18:00:00", "pages": [] }
+        };
         
-        async function loadChapters() {
-            try {
-                const response = await fetch('chapters.json');
-                chapters = await response.json();
-            } catch(e) {
-                chapters = {"1": {"title": "Глава 1", "pages": ["Glava1/1.png", "Glava1/2.png"]}};
-            }
-            init();
-            updateTimers();
-            setInterval(updateTimers, 60000);
-        }
+        let currentChapter = 1;
 
         function getDaysRemaining(releaseDate) {
             const now = new Date();
@@ -212,16 +180,13 @@
             if (diff <= 0) return null;
             const days = Math.floor(diff / (1000 * 60 * 60 * 24));
             const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            return { days, hours, total: diff };
+            return { days, hours };
         }
 
         function formatCountdown(releaseDate) {
             const remaining = getDaysRemaining(releaseDate);
-            if (!remaining) return null;
-            if (remaining.days > 0) {
-                return `${remaining.days}д ${remaining.hours}ч`;
-            }
-            return `${remaining.hours}ч`;
+            if (!remaining) return "Доступно!";
+            return `${remaining.days}д ${remaining.hours}ч`;
         }
 
         function isChapterLocked(chapter) {
@@ -229,6 +194,7 @@
         }
 
         function showChapter(chapterNum) {
+            currentChapter = chapterNum;
             document.querySelectorAll(".chapter-btn").forEach((btn) => {
                 btn.classList.toggle("active", btn.dataset.chapter == chapterNum);
             });
@@ -237,20 +203,17 @@
             const content = document.getElementById("content");
             
             if (isChapterLocked(chapter)) {
-                const remaining = getDaysRemaining(chapter.releaseDate);
                 content.innerHTML = `
                     <div class="chapter-header">
                         <h2 class="chapter-title">${chapter.title}</h2>
                         <div class="release-info">
                             <div>Скоро ближайший выход:</div>
-                            <div class="countdown">${formatCountdown(chapter.releaseDate)}</div>
+                            <div class="countdown" id="countdown">${formatCountdown(chapter.releaseDate)}</div>
                         </div>
                     </div>
                 `;
             } else {
-                content.innerHTML = `<div class="chapter-header">
-                    <h2 class="chapter-title">${chapter.title}</h2>
-                </div>`;
+                content.innerHTML = `<div class="chapter-header"><h2 class="chapter-title">${chapter.title}</h2></div>`;
                 
                 chapter.pages.forEach((page, index) => {
                     content.innerHTML += `
@@ -264,16 +227,17 @@
         }
 
         function updateTimers() {
+            const countdownEl = document.getElementById('countdown');
+            if (countdownEl && chapters[currentChapter].releaseDate) {
+                countdownEl.textContent = formatCountdown(chapters[currentChapter].releaseDate);
+            }
+            
             document.querySelectorAll('.chapter-btn').forEach(btn => {
                 const num = btn.dataset.chapter;
                 const chapter = chapters[num];
                 const timerEl = btn.querySelector('.timer');
-                
-                if (chapter.releaseDate && isChapterLocked(chapter)) {
-                    const countdown = formatCountdown(chapter.releaseDate);
-                    if (timerEl) {
-                        timerEl.textContent = countdown;
-                    }
+                if (timerEl && chapter.releaseDate) {
+                    timerEl.textContent = formatCountdown(chapter.releaseDate);
                 }
             });
         }
@@ -289,9 +253,7 @@
             document.body.style.overflow = '';
         }
 
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeZoom();
-        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeZoom(); });
 
         function init() {
             const container = document.getElementById("chapters");
@@ -308,9 +270,11 @@
                 container.innerHTML += `<button class="${btnClass}" data-chapter="${num}" onclick="showChapter(${num})">Глава ${num}${timerHtml}</button>`;
             });
             showChapter(1);
+            setInterval(updateTimers, 60000);
+            updateTimers();
         }
 
-        loadChapters();
+        init();
     </script>
 </body>
 </html>

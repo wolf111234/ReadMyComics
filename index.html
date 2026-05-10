@@ -15,6 +15,8 @@
   rel="stylesheet"
 />
 
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
 
 <style>
 
@@ -196,6 +198,7 @@ body{
 }
 
 .actions{
+  position:relative;
   display:flex;
   gap:10px;
 }
@@ -371,6 +374,74 @@ body{
   color:white;
 }
 
+/* CO-READING */
+
+.co-panel{
+  position:absolute;
+  top:54px;
+  right:0;
+  width:300px;
+  background:#0f172aee;
+  backdrop-filter:blur(18px);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:var(--radius);
+  padding:16px;
+  z-index:200;
+  display:none;
+  box-shadow:0 20px 60px rgba(0,0,0,.5);
+}
+
+.co-panel.show{
+  display:block;
+}
+
+.co-section{
+  margin-bottom:12px;
+}
+
+.co-room{
+  display:flex;
+  gap:8px;
+  margin-bottom:8px;
+}
+
+.co-input{
+  flex:1;
+  padding:10px;
+  border:none;
+  outline:none;
+  border-radius:12px;
+  background:#ffffff10;
+  color:white;
+  font-size:13px;
+}
+
+.co-input::placeholder{
+  color:var(--muted);
+}
+
+.co-action{
+  padding:10px 12px;
+  font-size:13px;
+  white-space:nowrap;
+}
+
+.co-create{
+  width:100%;
+  justify-content:center;
+}
+
+.co-status{
+  font-size:12px;
+  color:var(--muted);
+  text-align:center;
+  margin-top:6px;
+}
+
+.co-status.connected{
+  color:var(--success);
+}
+
 /* MOBILE */
 
 .sidebar-backdrop{
@@ -512,6 +583,10 @@ body{
 
       <div class="actions">
 
+        <button class="btn" onclick="toggleCoPanel()" id="coBtn">
+          👥
+        </button>
+
         <button class="btn" onclick="toggleFullscreen()">
           ⛶
         </button>
@@ -553,6 +628,31 @@ body{
 
   <img id="zoomImg">
 
+</div>
+
+<!-- CO-READING -->
+
+<div class="co-panel" id="coPanel">
+  <div class="co-section" id="coJoinSection">
+    <div class="co-room">
+      <input id="coRoomInput" placeholder="ID комнаты..." class="co-input">
+      <button class="btn co-action" onclick="joinRoom()">Войти</button>
+    </div>
+    <button class="btn co-action co-create" onclick="createRoom()">
+      ✨ Создать комнату
+    </button>
+  </div>
+  <div class="co-section" id="coConnectedSection" style="display:none">
+    <div class="co-room">
+      <input id="coShareInput" readonly class="co-input">
+      <button class="btn co-action" onclick="copyRoomLink()">📋</button>
+    </div>
+    <div class="co-room">
+      <button class="btn co-action" onclick="toggleMic()" id="coMicBtn">🎤 Микрофон</button>
+      <button class="btn co-action" onclick="disconnectRoom()">🚪 Выйти</button>
+    </div>
+  </div>
+  <div class="co-status" id="coStatus">Не подключено</div>
 </div>
 
 <script>
@@ -987,6 +1087,232 @@ if('serviceWorker' in navigator){
     .catch(()=>{});
 
 }
+
+/* CO-READING */
+
+const co = {
+  peer: null,
+  conn: null,
+  call: null,
+  stream: null,
+  audioEl: null,
+  roomId: null,
+  connected: false,
+  micOn: false,
+  isHost: false,
+  syncing: false,
+  scrollTimer: null
+};
+
+function toggleCoPanel(){
+  $('coPanel').classList.toggle('show');
+}
+
+function setCoStatus(text, ok){
+  const el = $('coStatus');
+  el.textContent = text;
+  el.classList.toggle('connected', ok);
+}
+
+function initPeer(cb){
+  if(co.peer) return cb && cb();
+  setCoStatus('Подключение к серверу...');
+  co.peer = new Peer();
+  co.peer.on('open', id => {
+    co.roomId = id;
+    cb && cb();
+  });
+  co.peer.on('connection', conn => {
+    co.conn = conn;
+    co.connected = true;
+    co.isHost = true;
+    conn.on('data', handleCoData);
+    conn.on('close', onDisconnect);
+    setCoStatus('✅ Зритель подключился!', true);
+    broadcastState();
+    if(co.stream && co.micOn){
+      co.call = co.peer.call(conn.peer, co.stream);
+    }
+  });
+  co.peer.on('call', call => {
+    call.answer();
+    call.on('stream', remoteStream => {
+      if(!co.audioEl){
+        co.audioEl = document.createElement('audio');
+        co.audioEl.autoplay = true;
+        co.audioEl.style.display = 'none';
+        document.body.appendChild(co.audioEl);
+      }
+      co.audioEl.srcObject = remoteStream;
+      co.audioEl.play().catch(() => {});
+    });
+    call.on('close', () => { co.call = null; });
+    co.call = call;
+  });
+  co.peer.on('error', err => {
+    if(err.type === 'unavailable-id'){
+      setCoStatus('❌ Ошибка: попробуйте ещё раз');
+    }else if(err.type !== 'disconnected'){
+      setCoStatus('Ошибка: ' + (err.message || err.type));
+    }
+  });
+}
+
+function broadcastState(){
+  if(!co.conn || !co.conn.open) return;
+  co.conn.send({ type: 'page', chapter: state.chapter });
+  setTimeout(() => {
+    if(co.conn && co.conn.open){
+      co.conn.send({ type: 'scroll', scrollTop: $('reader').scrollTop });
+    }
+  }, 200);
+}
+
+function createRoom(){
+  setCoStatus('Создание комнаты...');
+  initPeer(() => {
+    $('coJoinSection').style.display = 'none';
+    $('coConnectedSection').style.display = 'block';
+    const link = window.location.origin + window.location.pathname.replace(/\/?$/, '/') + '?room=' + co.peer.id;
+    $('coShareInput').value = link;
+    setCoStatus('✅ Вы ведущий! Отправьте ссылку друзьям', true);
+    $('coBtn').classList.add('active');
+    co.isHost = true;
+  });
+}
+
+function joinRoom(){
+  const id = $('coRoomInput').value.trim();
+  if(!id) return;
+  setCoStatus('Подключение...');
+  initPeer(() => {
+    co.conn = co.peer.connect(id, { reliable: true });
+    co.conn.on('open', () => {
+      co.connected = true;
+      co.isHost = false;
+      $('coJoinSection').style.display = 'none';
+      $('coConnectedSection').style.display = 'block';
+      $('coShareInput').value = 'Комната: ' + id;
+      setCoStatus('✅ Подключено к ведущему', true);
+      $('coBtn').classList.add('active');
+    });
+    co.conn.on('data', handleCoData);
+    co.conn.on('close', onDisconnect);
+  });
+}
+
+function handleCoData(data){
+  co.syncing = true;
+  switch(data.type){
+    case 'page':
+      openChapter(data.chapter);
+      break;
+    case 'scroll':
+      $('reader').scrollTop = data.scrollTop;
+      break;
+    case 'zoom':
+      openZoom(data.src);
+      break;
+  }
+  clearTimeout(co.scrollTimer);
+  co.scrollTimer = setTimeout(() => { co.syncing = false; }, 100);
+}
+
+function onDisconnect(){
+  disconnectRoom();
+}
+
+function disconnectRoom(){
+  if(co.conn && co.conn.open) co.conn.close();
+  if(co.call && co.call.open) co.call.close();
+  if(co.stream) co.stream.getTracks().forEach(t => t.stop());
+  if(co.audioEl){
+    co.audioEl.pause();
+    co.audioEl.srcObject = null;
+    co.audioEl.remove();
+  }
+  co.conn = null;
+  co.call = null;
+  co.stream = null;
+  co.audioEl = null;
+  co.connected = false;
+  co.micOn = false;
+  co.isHost = false;
+  $('coJoinSection').style.display = 'block';
+  $('coConnectedSection').style.display = 'none';
+  setCoStatus('Отключено');
+  $('coBtn').classList.remove('active');
+  $('coPanel').classList.remove('show');
+}
+
+function toggleMic(){
+  if(co.call && co.call.open && co.stream){
+    co.micOn = !co.micOn;
+    co.stream.getAudioTracks().forEach(t => t.enabled = co.micOn);
+    $('coMicBtn').textContent = co.micOn ? '🎤 🟢' : '🎤 🔴';
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      co.stream = stream;
+      co.micOn = true;
+      $('coMicBtn').textContent = '🎤 🟢';
+      if(co.connected && co.conn && co.conn.open){
+        co.call = co.peer.call(co.conn.peer, stream);
+      }
+    })
+    .catch(() => {
+      setCoStatus('❌ Нет доступа к микрофону');
+    });
+}
+
+function copyRoomLink(){
+  const input = $('coShareInput');
+  input.select();
+  navigator.clipboard?.writeText(input.value);
+  setCoStatus('✅ Ссылка скопирована!', true);
+}
+
+// auto-join from URL
+(function(){
+  const params = new URLSearchParams(window.location.search);
+  const room = params.get('room');
+  if(room){
+    setTimeout(() => {
+      $('coRoomInput').value = room;
+      joinRoom();
+    }, 1500);
+  }
+})();
+
+// broadcast sync (host only)
+const _origOpenChapter = openChapter;
+openChapter = function(id){
+  _origOpenChapter(id);
+  if(co.isHost && co.connected && co.conn && co.conn.open){
+    co.conn.send({ type: 'page', chapter: id });
+  }
+};
+
+const _origOpenZoom = openZoom;
+openZoom = function(src){
+  _origOpenZoom(src);
+  if(co.isHost && co.connected && co.conn && co.conn.open){
+    co.conn.send({ type: 'zoom', src });
+  }
+};
+
+$('reader').addEventListener('scroll', (function(){
+  let last = 0;
+  return function(){
+    const now = Date.now();
+    if(now - last < 80) return;
+    last = now;
+    if(co.isHost && co.connected && co.conn && co.conn.open && !co.syncing){
+      co.conn.send({ type: 'scroll', scrollTop: $('reader').scrollTop });
+    }
+  };
+})());
 
 /* START */
 

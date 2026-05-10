@@ -1,240 +1,998 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Карта глубин</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Inter', system-ui, sans-serif;
-            background: #0d0d0d;
-            color: #e0e0e0;
-            min-height: 100vh;
-            background-image:
-                radial-gradient(ellipse at top, #1a1a2e 0%, transparent 50%),
-                radial-gradient(ellipse at bottom, #16213e 0%, transparent 50%);
-            overflow-x: hidden;
-        }
-        .header {
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            background: linear-gradient(180deg, rgba(13,13,13,0.97) 0%, rgba(13,13,13,0) 100%);
-            padding: 12px 40px 20px;
-            z-index: 100;
-            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .header.hidden { transform: translateY(-100%); }
-        .header.show { transform: translateY(0); }
-        .title {
-            font-size: 24px; font-weight: 800; text-align: center;
-            letter-spacing: 6px; text-transform: uppercase;
-            background: linear-gradient(135deg, #00d4ff 0%, #7b2cbf 50%, #ff006e 100%);
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .header-row {
-            display: flex; justify-content: center; align-items: center;
-            gap: 12px; margin-top: 10px; flex-wrap: wrap;
-        }
-        .download-btn {
-            background: linear-gradient(135deg, #00d4ff, #7b2cbf);
-            color: #fff; border: none; padding: 6px 16px;
-            border-radius: 25px; cursor: pointer; font-size: 12px;
-            font-weight: 600; text-decoration: none;
-            transition: transform 0.2s;
-        }
-        .download-btn:hover { transform: scale(1.05); }
-        .volumes {
-            display: flex; justify-content: center; gap: 6px;
-            margin-top: 8px; flex-wrap: wrap;
-        }
-        .volume-btn {
-            background: rgba(255,255,255,0.05); color: #aaa;
-            border: 1px solid rgba(255,255,255,0.1);
-            padding: 5px 14px; cursor: pointer; font-size: 11px;
-            font-weight: 600; border-radius: 25px; transition: all 0.3s;
-        }
-        .volume-btn:hover { background: rgba(123,44,191,0.2); border-color: #7b2cbf; color: #fff; }
-        .volume-btn.active { background: linear-gradient(135deg, #7b2cbf, #ff006e); border-color: transparent; color: #fff; }
-        .chapters {
-            display: flex; justify-content: center; gap: 6px;
-            margin-top: 8px; flex-wrap: wrap;
-        }
-        .chapter-btn.read { border-color: #00d4ff80; color: #00d4ff; }
-        .chapter-btn {
-            background: rgba(255,255,255,0.05); color: #aaa;
-            border: 1px solid rgba(255,255,255,0.1);
-            padding: 5px 12px; cursor: pointer; font-size: 11px;
-            border-radius: 25px; transition: all 0.3s;
-        }
-        .chapter-btn:hover { background: rgba(0,212,255,0.1); border-color: #00d4ff; color: #fff; }
-        .chapter-btn.active { background: linear-gradient(135deg, #00d4ff, #7b2cbf); border-color: transparent; color: #fff; font-weight: 600; }
-        .chapter-btn.locked { opacity: 0.4; cursor: not-allowed; }
-        .timer {
-            font-size: 9px; background: rgba(255,0,100,0.2);
-            padding: 2px 6px; border-radius: 10px; color: #ff006e;
-            margin-left: 4px; font-weight: 600;
-        }
-        .content { max-width: 700px; margin: 0 auto; padding: 170px 20px 60px; }
-        .chapter-header { text-align: center; margin-bottom: 25px; }
-        .chapter-title { font-size: 20px; color: #00d4ff; font-weight: 300; letter-spacing: 3px; }
-        .release-info { margin-top: 12px; color: #ff006e; font-size: 13px; }
-        .read-toggle {
-            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-            color: #aaa; padding: 4px 14px; border-radius: 25px; cursor: pointer;
-            font-size: 11px; font-weight: 600; transition: all 0.3s; margin-top: 10px;
-        }
-        .read-toggle:hover { border-color: #00d4ff; color: #00d4ff; background: rgba(0,212,255,0.1); }
-        .read-toggle.on { border-color: #00d4ff80; color: #00d4ff; background: rgba(0,212,255,0.15); }
-        .countdown { font-size: 20px; font-weight: 700; margin-top: 6px; letter-spacing: 2px; }
-        .page {
-            margin-bottom: 16px;
-            opacity: 0; transform: translateY(24px);
-            animation: fadeIn 0.6s ease forwards;
-        }
-        .page:nth-child(2) { animation-delay: 0.1s; }
-        .page:nth-child(3) { animation-delay: 0.2s; }
-        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
-        .page-image { width: 100%; display: block; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); cursor: zoom-in; }
-        .page-number { text-align: center; color: #555; font-size: 11px; margin-top: 6px; }
-        .zoom-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.95); z-index: 200; overflow: auto; }
-        .zoom-overlay.active { display: block; }
-        .zoom-container { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; }
-        .zoom-image { max-width: 100%; cursor: move; }
-        .close-zoom { position: fixed; top: 20px; right: 20px; background: rgba(255,0,0,0.3); color: #fff; border: none; padding: 10px 20px; cursor: pointer; border-radius: 25px; font-weight: 600; }
-    </style>
+<meta charset="UTF-8" />
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+/>
+
+<title>Карта глубин</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link
+  href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+  rel="stylesheet"
+/>
+
+
+<style>
+
+:root{
+  --bg:#070b14;
+  --panel:#101827ee;
+  --panel2:#111827;
+  --text:#f1f5f9;
+  --muted:#94a3b8;
+  --accent:#38bdf8;
+  --accent2:#a855f7;
+  --success:#10b981;
+  --danger:#ff006e;
+  --radius:20px;
+}
+
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+  scrollbar-width:thin;
+  scrollbar-color:#7c3aed #0f172a;
+}
+
+html,body{
+  height:100%;
+}
+
+body{
+  font-family:'Inter',sans-serif;
+  background:
+    radial-gradient(circle at top,#172554 0%,transparent 35%),
+    radial-gradient(circle at bottom,#1e1b4b 0%,transparent 40%),
+    #070b14;
+  color:var(--text);
+  overflow:hidden;
+}
+
+/* APP */
+
+.app{
+  display:grid;
+  grid-template-columns:320px 1fr;
+  height:100vh;
+}
+
+/* SIDEBAR */
+
+.sidebar{
+  background:var(--panel);
+  backdrop-filter:blur(18px);
+  border-right:1px solid rgba(255,255,255,.08);
+  overflow:auto;
+  padding:18px;
+  z-index:100;
+}
+
+.brand{
+  font-size:30px;
+  font-weight:800;
+  margin-bottom:18px;
+
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+
+.download-btn{
+  width:100%;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+
+  padding:14px;
+  border-radius:16px;
+
+  text-decoration:none;
+  color:white;
+  font-weight:700;
+
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+
+  margin-bottom:18px;
+
+  box-shadow:0 10px 40px rgba(56,189,248,.25);
+}
+
+.search{
+  width:100%;
+  padding:14px;
+  border:none;
+  outline:none;
+  border-radius:14px;
+  background:#ffffff10;
+  color:white;
+  margin-bottom:18px;
+}
+
+.section-title{
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:2px;
+  color:var(--muted);
+  margin-bottom:10px;
+  margin-top:14px;
+}
+
+.volume-btn,
+.chapter-btn{
+  width:100%;
+  border:none;
+  outline:none;
+  cursor:pointer;
+
+  padding:14px;
+  margin-bottom:10px;
+
+  border-radius:16px;
+
+  background:#ffffff08;
+  color:white;
+
+  transition:.25s;
+  text-align:left;
+}
+
+.volume-btn:hover,
+.chapter-btn:hover{
+  background:#ffffff15;
+}
+
+.volume-btn.active,
+.chapter-btn.active{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+}
+
+.chapter-btn.read{
+  border:1px solid rgba(16,185,129,.55);
+}
+
+.chapter-btn.locked{
+  opacity:.45;
+}
+
+.timer{
+  margin-top:8px;
+  display:inline-block;
+  font-size:11px;
+  color:#ff7eb6;
+}
+
+/* MAIN */
+
+.main{
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+}
+
+/* TOPBAR */
+
+.topbar{
+  height:72px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+
+  padding:0 20px;
+
+  background:#0b1220dd;
+  backdrop-filter:blur(16px);
+
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+
+.top-title{
+  font-weight:700;
+  font-size:18px;
+}
+
+.actions{
+  display:flex;
+  gap:10px;
+}
+
+.btn{
+  border:none;
+  cursor:pointer;
+
+  padding:10px 14px;
+
+  border-radius:14px;
+
+  background:#ffffff10;
+  color:white;
+
+  transition:.25s;
+}
+
+.btn:hover{
+  background:#ffffff20;
+}
+
+/* READER */
+
+.reader{
+  flex:1;
+  overflow:auto;
+  padding:26px;
+  scroll-behavior:smooth;
+  overscroll-behavior-y:contain;
+  -webkit-overflow-scrolling:touch;
+}
+
+.reader::-webkit-scrollbar{
+  width:10px;
+  height:10px;
+}
+
+.reader::-webkit-scrollbar-track{
+  background:rgba(15,23,42,.65);
+  border-radius:999px;
+}
+
+.reader::-webkit-scrollbar-thumb{
+  background:
+    linear-gradient(
+      180deg,
+      #38bdf8,
+      #7c3aed,
+      #ec4899
+    );
+  border-radius:999px;
+  border:2px solid rgba(15,23,42,.9);
+  transition:.25s;
+  box-shadow:
+    0 0 10px rgba(168,85,247,.45),
+    0 0 20px rgba(56,189,248,.25);
+}
+
+.reader::-webkit-scrollbar-thumb:hover{
+  background:
+    linear-gradient(
+      180deg,
+      #67e8f9,
+      #a855f7,
+      #ff4da6
+    );
+}
+
+.reader::-webkit-scrollbar-corner{
+  background:transparent;
+}
+
+.chapter-header{
+  text-align:center;
+  margin-bottom:28px;
+}
+
+.chapter-title{
+  font-size:36px;
+  font-weight:800;
+
+  margin-bottom:14px;
+
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+}
+
+.chapter-meta{
+  display:flex;
+  justify-content:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.read-btn{
+  border:none;
+  cursor:pointer;
+
+  padding:10px 16px;
+
+  border-radius:14px;
+
+  background:#ffffff10;
+  color:white;
+
+  font-weight:700;
+}
+
+.read-btn.read{
+  background:linear-gradient(135deg,#10b981,#059669);
+}
+
+.page-wrap{
+  position:relative;
+  max-width:950px;
+  margin:0 auto 24px;
+}
+
+.page{
+  width:100%;
+  display:block;
+
+  border-radius:18px;
+
+  box-shadow:0 20px 60px rgba(0,0,0,.5);
+
+  cursor:zoom-in;
+}
+
+.page-number{
+  text-align:center;
+  color:var(--muted);
+  margin-top:10px;
+  font-size:12px;
+}
+
+/* ZOOM */
+
+.zoom{
+  position:fixed;
+  inset:0;
+  background:black;
+  z-index:999;
+  display:none;
+  overflow:auto;
+}
+
+.zoom.active{
+  display:block;
+}
+
+.zoom img{
+  width:100%;
+}
+
+.close{
+  position:fixed;
+  top:20px;
+  right:20px;
+  z-index:1000;
+
+  border:none;
+  cursor:pointer;
+
+  padding:12px 16px;
+
+  border-radius:14px;
+
+  background:#ffffff20;
+  color:white;
+}
+
+/* MOBILE */
+
+.sidebar-backdrop{
+  position:fixed;
+  inset:0;
+
+  background:rgba(0,0,0,.55);
+
+  backdrop-filter:blur(4px);
+
+  z-index:90;
+
+  opacity:0;
+  pointer-events:none;
+
+  transition:.25s;
+}
+
+.sidebar-backdrop.show{
+  opacity:1;
+  pointer-events:auto;
+}
+
+.mobile-nav{
+  display:none;
+}
+
+@media(max-width:900px){
+
+  .reader::-webkit-scrollbar{
+    width:4px;
+  }
+
+  .app{
+    grid-template-columns:1fr;
+  }
+
+  .sidebar{
+    position:fixed;
+    inset:0 18% 0 0;
+
+    transform:translateX(-100%);
+    transition:.3s;
+  }
+
+  .sidebar.open{
+    transform:translateX(0);
+  }
+
+  .reader{
+    padding-bottom:100px;
+  }
+
+  .mobile-nav{
+    position:fixed;
+
+    left:0;
+    right:0;
+    bottom:0;
+
+    height:74px;
+
+    background:#0b1220ee;
+
+    backdrop-filter:blur(16px);
+
+    display:flex;
+    justify-content:space-around;
+    align-items:center;
+
+    border-top:1px solid rgba(255,255,255,.08);
+
+    z-index:90;
+  }
+
+}
+
+</style>
 </head>
 <body>
-    <div class="header" id="header">
-        <h1 class="title">Карта глубин</h1>
-        <div class="header-row">
-            <a class="download-btn" href="KartaGlubin.apk" download>📱 Скачать приложение</a>
-        </div>
-        <div class="volumes" id="volumes"></div>
-        <div class="chapters" id="chapters"></div>
+
+<div
+  class="sidebar-backdrop"
+  id="sidebarBackdrop"
+  onclick="closeSidebar()">
+</div>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+
+  <aside class="sidebar" id="sidebar">
+
+    <div class="brand">
+      Карта глубин
     </div>
-    <div class="content" id="content"></div>
-    <div class="zoom-overlay" id="zoomOverlay">
-        <button class="close-zoom" onclick="closeZoom()">✕ Закрыть</button>
-        <div class="zoom-container">
-            <img class="zoom-image" id="zoomImage" src="" alt="">
-        </div>
+
+    <a
+      class="download-btn"
+      href="KartaGlubin.apk"
+      download
+    >
+      📱 Скачать приложение
+    </a>
+
+    <input
+      class="search"
+      id="search"
+      placeholder="Поиск главы..."
+    >
+
+    <div class="section-title">
+      Тома
     </div>
 
-    <script>
-        let volumes = {};
-        let currentVolume, currentChapter;
-        let lastScroll = 0, headerVisible = true;
+    <div id="volumes"></div>
 
-        function getReadKey(v, c) { return 'read_v'+v+'_ch'+c; }
-        function isRead(v, c) { return localStorage.getItem(getReadKey(v, c)) === '1'; }
-        function toggleRead(v, c) {
-            const k = getReadKey(v, c);
-            isRead(v, c) ? localStorage.removeItem(k) : localStorage.setItem(k, '1');
-            updateChapterButtons();
-            const btn = document.querySelector('.read-toggle');
-            if (btn) { const r = isRead(v, c); btn.textContent = r ? '✓ Прочитано' : 'Отметить прочитанным'; btn.classList.toggle('on', r); }
+    <div class="section-title">
+      Главы
+    </div>
+
+    <div id="chapters"></div>
+
+  </aside>
+
+  <!-- MAIN -->
+
+  <main class="main">
+
+    <header class="topbar">
+
+      <button class="btn" onclick="toggleSidebar()">
+        ☰
+      </button>
+
+      <div class="top-title" id="topTitle">
+        Загрузка...
+      </div>
+
+      <div class="actions">
+
+        <button class="btn" onclick="toggleFullscreen()">
+          ⛶
+        </button>
+
+      </div>
+
+    </header>
+
+    <section class="reader" id="reader"></section>
+
+  </main>
+
+</div>
+
+<!-- MOBILE NAV -->
+
+<nav class="mobile-nav">
+
+  <button class="btn" onclick="toggleSidebar()">
+    Главы
+  </button>
+
+  <button
+    class="btn"
+    onclick="window.scrollTo({top:0,behavior:'smooth'})"
+  >
+    ↑
+  </button>
+
+</nav>
+
+<!-- ZOOM -->
+
+<div class="zoom" id="zoom">
+
+  <button class="close" onclick="closeZoom()">
+    ✕
+  </button>
+
+  <img id="zoomImg">
+
+</div>
+
+<script>
+
+const state = {
+  volumes:{},
+  volume:null,
+  chapter:null
+};
+
+const $ = id => document.getElementById(id);
+
+/* READ */
+
+function getReadKey(v,c){
+  return `read_${v}_${c}`;
+}
+
+function isRead(v,c){
+  return localStorage.getItem(getReadKey(v,c)) === '1';
+}
+
+function toggleRead(){
+
+  const key = getReadKey(
+    state.volume,
+    state.chapter
+  );
+
+  if(isRead(state.volume,state.chapter)){
+    localStorage.removeItem(key);
+  }else{
+    localStorage.setItem(key,'1');
+  }
+
+  renderChapters();
+
+  openChapter(state.chapter);
+
+}
+
+/* INIT */
+
+async function init(){
+
+  try{
+
+    state.volumes =
+      await (await fetch('chapters.json')).json();
+
+  }catch{
+
+    state.volumes = {
+      1:{
+        title:"Том 1",
+        chapters:{
+          1:{
+            title:"Глава 1",
+            pages:[
+              "Glava1/1.webp",
+              "Glava1/2.webp",
+              "Glava1/3.webp"
+            ]
+          },
+          2:{
+            title:"Глава 2",
+            pages:[
+              "Glava2/1.webp",
+              "Glava2/2.webp"
+            ]
+          },
+          3:{
+            title:"Глава 3",
+            releaseDate:"2026-12-31T12:00:00"
+          }
+        }
+      }
+    };
+
+  }
+
+  renderVolumes();
+
+  const first = Object.keys(state.volumes)[0];
+
+  openVolume(first);
+
+}
+
+/* VOLUMES */
+
+function renderVolumes(){
+
+  $('volumes').innerHTML='';
+
+  Object.entries(state.volumes).forEach(([id,v])=>{
+
+    const btn = document.createElement('button');
+
+    btn.className='volume-btn';
+
+    if(id == state.volume){
+      btn.classList.add('active');
+    }
+
+    btn.textContent=v.title;
+
+    btn.onclick=()=>openVolume(id);
+
+    $('volumes').appendChild(btn);
+
+  });
+
+}
+
+/* CHAPTERS */
+
+function renderChapters(){
+
+  $('chapters').innerHTML='';
+
+  const chapters =
+    state.volumes[state.volume].chapters;
+
+  Object.entries(chapters).forEach(([id,ch])=>{
+
+    const btn = document.createElement('button');
+
+    btn.className='chapter-btn';
+
+    if(id == state.chapter){
+      btn.classList.add('active');
+    }
+
+    if(isRead(state.volume,id)){
+      btn.classList.add('read');
+    }
+
+    if(
+      ch.releaseDate &&
+      new Date(ch.releaseDate) > new Date()
+    ){
+      btn.classList.add('locked');
+    }
+
+    btn.innerHTML=`
+      <div>${ch.title}</div>
+
+      ${
+        ch.releaseDate
+        ? `<div class="timer">${getRemaining(ch.releaseDate)}</div>`
+        : ''
+      }
+    `;
+
+    btn.onclick=()=>{
+
+      openChapter(id);
+
+      closeSidebar();
+
+    };
+
+    $('chapters').appendChild(btn);
+
+  });
+
+}
+
+/* OPEN VOLUME */
+
+function openVolume(id){
+
+  state.volume=id;
+
+  renderVolumes();
+
+  renderChapters();
+
+  const first =
+    Object.keys(
+      state.volumes[id].chapters
+    )[0];
+
+  openChapter(first);
+
+}
+
+/* OPEN CHAPTER */
+
+function openChapter(id){
+
+  state.chapter=id;
+
+  renderChapters();
+
+  const ch =
+    state.volumes[state.volume].chapters[id];
+
+  $('topTitle').textContent=ch.title;
+
+  const reader = $('reader');
+
+  reader.innerHTML='';
+
+  /* HEADER */
+
+  const header = document.createElement('div');
+
+  header.className='chapter-header';
+
+  header.innerHTML=`
+    <div class="chapter-title">
+      ${ch.title}
+    </div>
+
+    <div class="chapter-meta">
+
+      <button
+        class="read-btn ${isRead(state.volume,id)?'read':''}"
+        onclick="toggleRead()"
+      >
+
+        ${
+          isRead(state.volume,id)
+          ? '✓ Прочитано'
+          : 'Отметить прочитанным'
         }
 
-        window.addEventListener('scroll', () => {
-            const s = window.pageYOffset;
-            const h = document.getElementById('header');
-            if (s > 80 && s > lastScroll && headerVisible) { h.classList.add('hidden'); h.classList.remove('show'); headerVisible = false; }
-            else if ((s < lastScroll || s < 80) && !headerVisible) { h.classList.remove('hidden'); h.classList.add('show'); headerVisible = true; }
-            lastScroll = s;
-        });
+      </button>
 
-        function getRemaining(d) { const n=new Date(),r=new Date(d),diff=r-n; if(diff<=0)return null; return{days:Math.floor(diff/864e5),hours:Math.floor((diff%864e5)/36e5),mins:Math.floor((diff%36e5)/6e4),secs:Math.floor((diff%6e4)/1e3)}; }
-        function fmt(d) { const r=getRemaining(d); if(!r)return 'Доступно!'; return r.days+'д '+r.hours+'ч '+r.mins+'м '+r.secs+'с'; }
+    </div>
+  `;
 
-        function updateChapterButtons() {
-            document.querySelectorAll('.chapter-btn').forEach(b => {
-                if (b.dataset.chapter && currentVolume) b.classList.toggle('read', isRead(currentVolume, b.dataset.chapter));
-            });
-        }
+  reader.appendChild(header);
 
-        function showVolume(vn) {
-            currentVolume = vn;
-            document.querySelectorAll('.volume-btn').forEach(b => b.classList.toggle('active', b.dataset.vol == vn));
-            const vol = volumes[vn];
-            const c = document.getElementById('chapters'); c.innerHTML = '';
-            Object.keys(vol.chapters).sort((a,b)=>a-b).forEach(chNum => {
-                const ch = vol.chapters[chNum];
-                const hasPages = ch.pages && ch.pages.length;
-                const timerActive = ch.releaseDate && new Date(ch.releaseDate) > new Date();
-                let cls = 'chapter-btn';
-                if (isRead(vn, chNum)) cls += ' read';
-                let timerHtml = '';
-                if (timerActive) { cls += ' locked'; timerHtml = `<span class="timer">${fmt(ch.releaseDate)}</span>`; }
-                c.innerHTML += `<button class="${cls}" data-chapter="${chNum}" onclick="showChapter(${chNum})">${ch.title}${timerHtml}</button>`;
-            });
-            const keys = Object.keys(vol.chapters).sort((a,b)=>a-b);
-            showChapter(keys[0]);
-        }
+  /* LOCK */
 
-        function showChapter(chNum) {
-            currentChapter = chNum;
-            document.querySelectorAll('.chapter-btn').forEach(b => b.classList.toggle('active', b.dataset.chapter == chNum));
-            const ch = volumes[currentVolume].chapters[chNum];
-            const hasPages = ch.pages && ch.pages.length;
-            const timerActive = ch.releaseDate && new Date(ch.releaseDate) > new Date();
-            const el = document.getElementById('content');
-            const rd = isRead(currentVolume, chNum);
-            const readBtn = `<button class="read-toggle${rd?' on':''}" onclick="toggleRead(${currentVolume},${chNum})">${rd?'✓ Прочитано':'Отметить прочитанным'}</button>`;
-            if (hasPages && !timerActive) {
-                el.innerHTML = `<div class="chapter-header"><h2 class="chapter-title">${ch.title}</h2>${readBtn}</div>`;
-                ch.pages.forEach((p,i) => { el.innerHTML += `<div class="page"><img class="page-image" src="${p}" alt="Страница ${i+1}" onclick="openZoom('${p}')"><div class="page-number">${i+1}</div></div>`; });
-            } else if (ch.releaseDate) {
-                el.innerHTML = `<div class="chapter-header"><h2 class="chapter-title">${ch.title}</h2><div class="release-info"><div>Скоро:</div><div class="countdown" id="countdown">${fmt(ch.releaseDate)}</div></div>${readBtn}</div>`;
-            } else {
-                el.innerHTML = `<div class="chapter-header"><h2 class="chapter-title">${ch.title}</h2><div class="release-info" style="color:#888">Скоро</div>${readBtn}</div>`;
-            }
-        }
+  if(
+    ch.releaseDate &&
+    new Date(ch.releaseDate) > new Date()
+  ){
 
-        function updateTimers() {
-            const el = document.getElementById('countdown');
-            const ch = volumes[currentVolume]?.chapters[currentChapter];
-            if (el && ch?.releaseDate) {
-                const timerActive = new Date(ch.releaseDate) > new Date();
-                if (!timerActive && ch.pages?.length) showChapter(currentChapter);
-                else el.textContent = fmt(ch.releaseDate);
-            }
-            document.querySelectorAll('.chapter-btn').forEach(btn => {
-                const num = btn.dataset.chapter;
-                const ch = volumes[currentVolume].chapters[num];
-                const timerActive = ch.releaseDate && new Date(ch.releaseDate) > new Date();
-                const timerEl = btn.querySelector('.timer');
-                if (ch.releaseDate) {
-                    if (timerActive) { btn.classList.add('locked'); if (!timerEl) btn.innerHTML += `<span class="timer">${fmt(ch.releaseDate)}</span>`; else timerEl.textContent = fmt(ch.releaseDate); }
-                    else { btn.classList.remove('locked'); if (timerEl) timerEl.remove(); }
-                }
-            });
-        }
+    const locked = document.createElement('div');
 
-        function openZoom(src) { document.getElementById('zoomImage').src = src; document.getElementById('zoomOverlay').classList.add('active'); document.body.style.overflow = 'hidden'; }
-        function closeZoom() { document.getElementById('zoomOverlay').classList.remove('active'); document.body.style.overflow = ''; }
-        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeZoom(); });
+    locked.style.textAlign='center';
 
-        async function init() {
-            try { const r = await fetch('chapters.json'); volumes = await r.json(); }
-            catch(e) {
-                volumes = {};
-                volumes[1] = {title:"Том 1",chapters:{}};
-                volumes[1].chapters[1] = {title:"Глава 1",pages:["Glava1/1.png","Glava1/2.png","Glava1/3.png"]};
-                volumes[1].chapters[2] = {title:"Глава 2",pages:["Glava2/1.png","Glava2/2.png","Glava2/3.png","Glava2/4.png"]};
-                volumes[1].chapters[3] = {title:"Глава 3",releaseDate:"2026-05-15T12:30:00"};
-                volumes[1].chapters[4] = {title:"Глава 4",releaseDate:"2027-12-31T12:30:00"};
-            }
-            const c = document.getElementById('volumes');
-            Object.keys(volumes).sort((a,b)=>a-b).forEach(v => { c.innerHTML += `<button class="volume-btn" data-vol="${v}" onclick="showVolume(${v})">${volumes[v].title}</button>`; });
-            showVolume(Object.keys(volumes).sort((a,b)=>a-b)[0]);
-            setInterval(updateTimers, 1000);
-            updateTimers();
-        }
-        init();
-    </script>
+    locked.style.marginTop='40px';
+
+    locked.innerHTML=`
+      <div
+        style="
+          font-size:22px;
+          color:#ff7eb6;
+          margin-bottom:14px;
+        "
+      >
+        Глава скоро выйдет
+      </div>
+
+      <div
+        style="
+          font-size:34px;
+          font-weight:800;
+        "
+      >
+        ${getRemaining(ch.releaseDate)}
+      </div>
+    `;
+
+    reader.appendChild(locked);
+
+    return;
+
+  }
+
+  /* PAGES */
+
+  if(ch.pages){
+
+    ch.pages.forEach((src,i)=>{
+
+      const wrap = document.createElement('div');
+
+      wrap.className='page-wrap';
+
+      const img = document.createElement('img');
+
+      img.className='page';
+
+      img.loading='lazy';
+
+      img.src=src;
+
+      img.onclick=()=>openZoom(src);
+
+      const num = document.createElement('div');
+
+      num.className='page-number';
+
+      num.textContent='Страница '+(i+1);
+
+      wrap.append(img,num);
+
+      reader.appendChild(wrap);
+
+    });
+
+  }
+
+}
+
+/* TIMER */
+
+function getRemaining(date){
+
+  const now = new Date();
+
+  const target = new Date(date);
+
+  const diff = target - now;
+
+  if(diff <= 0){
+    return 'Доступно!';
+  }
+
+  const d = Math.floor(diff/86400000);
+
+  const h = Math.floor((diff%86400000)/3600000);
+
+  const m = Math.floor((diff%3600000)/60000);
+
+  const s = Math.floor((diff%60000)/1000);
+
+  return `${d}д ${h}ч ${m}м ${s}с`;
+
+}
+
+/* SEARCH */
+
+$('search').addEventListener('input',e=>{
+
+  const q = e.target.value.toLowerCase();
+
+  document.querySelectorAll('.chapter-btn')
+    .forEach(btn=>{
+
+      btn.style.display =
+        btn.textContent
+          .toLowerCase()
+          .includes(q)
+        ? 'block'
+        : 'none';
+
+    });
+
+});
+
+/* SIDEBAR */
+
+function toggleSidebar(){
+
+  $('sidebar').classList.toggle('open');
+
+  $('sidebarBackdrop')
+    .classList.toggle('show');
+
+}
+
+function closeSidebar(){
+
+  $('sidebar').classList.remove('open');
+
+  $('sidebarBackdrop')
+    .classList.remove('show');
+
+}
+
+/* FULLSCREEN */
+
+function toggleFullscreen(){
+
+  if(!document.fullscreenElement){
+
+    document.documentElement
+      .requestFullscreen();
+
+  }else{
+
+    document.exitFullscreen();
+
+  }
+
+}
+
+/* ZOOM */
+
+function openZoom(src){
+
+  $('zoomImg').src=src;
+
+  $('zoom').classList.add('active');
+
+  document.body.style.overflow='hidden';
+
+}
+
+function closeZoom(){
+
+  $('zoom').classList.remove('active');
+
+  document.body.style.overflow='';
+
+}
+
+/* ESC */
+
+document.addEventListener('keydown',e=>{
+
+  if(e.key==='Escape'){
+    closeZoom();
+  }
+
+});
+
+/* SERVICE WORKER */
+
+if('serviceWorker' in navigator){
+
+  navigator.serviceWorker
+    .register('sw.js')
+    .catch(()=>{});
+
+}
+
+/* START */
+
+init();
+
+</script>
+
 </body>
 </html>

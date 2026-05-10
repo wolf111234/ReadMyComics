@@ -199,145 +199,101 @@
     </div>
 
     <script>
-        const volumes = {
-            1: {
-                title: "Том 1",
-                chapters: {
-                    "1": { "title": "Глава 1", "pages": ["Glava1/1.png", "Glava1/2.png", "Glava1/3.png"] },
-                    "2": { "title": "Глава 2", "releaseDate": "2026-05-17T18:00:00", "pages": [] }
-                }
-            }
-        };
-
-        let currentVolume = 1;
-        let currentChapter = Object.keys(volumes[1].chapters)[0];
+        let volumes = {};
+        let currentVolume, currentChapter;
         let lastScroll = 0;
         let headerVisible = true;
 
         window.addEventListener('scroll', () => {
-            const currentScroll = window.pageYOffset;
-            const header = document.getElementById('header');
-            if (currentScroll > 80 && currentScroll > lastScroll && headerVisible) {
-                header.classList.add('hidden');
-                header.classList.remove('show');
-                headerVisible = false;
-            } else if ((currentScroll < lastScroll || currentScroll < 80) && !headerVisible) {
-                header.classList.remove('hidden');
-                header.classList.add('show');
-                headerVisible = true;
-            }
-            lastScroll = currentScroll;
+            const s = window.pageYOffset;
+            const h = document.getElementById('header');
+            if (s > 80 && s > lastScroll && headerVisible) { h.classList.add('hidden'); h.classList.remove('show'); headerVisible = false; }
+            else if ((s < lastScroll || s < 80) && !headerVisible) { h.classList.remove('hidden'); h.classList.add('show'); headerVisible = true; }
+            lastScroll = s;
         });
 
-        function getRemaining(releaseDate) {
-            const now = new Date();
-            const release = new Date(releaseDate);
-            const diff = release - now;
-            if (diff <= 0) return null;
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-            const secs = Math.floor((diff % (1000 * 60)) / 1000);
-            return { days, hours, mins, secs, total: diff };
-        }
+        function getRemaining(d) { const n = new Date(), r = new Date(d), diff = r - n; if (diff <= 0) return null; return { days: Math.floor(diff/864e5), hours: Math.floor((diff%864e5)/36e5), mins: Math.floor((diff%36e5)/6e4), secs: Math.floor((diff%6e4)/1e3) }; }
 
-        function formatCountdown(releaseDate) {
-            const r = getRemaining(releaseDate);
-            if (!r) return "Доступно!";
-            if (r.days > 0) return `${r.days}д ${r.hours}ч ${r.mins}м`;
-            if (r.hours > 0) return `${r.hours}ч ${r.mins}м ${r.secs}с`;
-            return `${r.mins}м ${r.secs}с`;
-        }
+        function fmt(d) { const r = getRemaining(d); if (!r) return 'Доступно!'; return r.days+'д '+r.hours+'ч '+r.mins+'м '+r.secs+'с'; }
 
-        function isChapterLocked(chapter) {
-            return chapter.pages && chapter.pages.length === 0 && chapter.releaseDate;
-        }
-
-        function showVolume(volNum) {
-            currentVolume = volNum;
-            document.querySelectorAll(".volume-btn").forEach(b => b.classList.toggle("active", b.dataset.vol == volNum));
-            const vol = volumes[volNum];
-            const container = document.getElementById("chapters");
-            container.innerHTML = "";
-            Object.keys(vol.chapters).sort((a,b) => a-b).forEach(num => {
-                const ch = vol.chapters[num];
+        function showVolume(vn) {
+            currentVolume = vn;
+            document.querySelectorAll('.volume-btn').forEach(b => b.classList.toggle('active', b.dataset.vol == vn));
+            const vol = volumes[vn];
+            const c = document.getElementById('chapters'); c.innerHTML = '';
+            Object.keys(vol.chapters).sort((a,b)=>a-b).forEach(chNum => {
+                const ch = vol.chapters[chNum];
+                const hasPages = ch.pages && ch.pages.length;
+                const hasTimer = ch.releaseDate;
+                const timerActive = hasTimer && new Date(ch.releaseDate) > new Date();
                 let cls = 'chapter-btn';
                 let timerHtml = '';
-                if (isChapterLocked(ch)) {
-                    cls += ' locked';
-                    timerHtml = `<span class="timer">${formatCountdown(ch.releaseDate)}</span>`;
-                }
-                container.innerHTML += `<button class="${cls}" data-chapter="${num}" onclick="showChapter(${num})">Глава ${num}${timerHtml}</button>`;
+                if (timerActive) { cls += ' locked'; timerHtml = `<span class="timer">${fmt(ch.releaseDate)}</span>`; }
+                c.innerHTML += `<button class="${cls}" data-chapter="${chNum}" onclick="showChapter(${chNum})">Глава ${chNum}${timerHtml}</button>`;
             });
-            const firstCh = Object.keys(vol.chapters).sort((a,b)=>a-b)[0];
-            showChapter(firstCh);
+            const keys = Object.keys(vol.chapters).sort((a,b)=>a-b);
+            showChapter(keys[0]);
         }
 
-        function showChapter(chapterNum) {
-            currentChapter = chapterNum;
-            document.querySelectorAll(".chapter-btn").forEach(b => b.classList.toggle("active", b.dataset.chapter == chapterNum));
-            const chapter = volumes[currentVolume].chapters[chapterNum];
-            const content = document.getElementById("content");
-
-            if (isChapterLocked(chapter)) {
-                content.innerHTML = `
-                    <div class="chapter-header">
-                        <h2 class="chapter-title">${chapter.title}</h2>
-                        <div class="release-info">
-                            <div>Скоро ближайший выход:</div>
-                            <div class="countdown" id="countdown">${formatCountdown(chapter.releaseDate)}</div>
-                        </div>
-                    </div>
-                `;
+        function showChapter(chNum) {
+            currentChapter = chNum;
+            document.querySelectorAll('.chapter-btn').forEach(b => b.classList.toggle('active', b.dataset.chapter == chNum));
+            const ch = volumes[currentVolume].chapters[chNum];
+            const hasPages = ch.pages && ch.pages.length;
+            const hasTimer = ch.releaseDate;
+            const timerActive = hasTimer && new Date(ch.releaseDate) > new Date();
+            const el = document.getElementById('content');
+            if (hasPages && !timerActive) {
+                el.innerHTML = `<div class="chapter-header"><h2 class="chapter-title">${ch.title}</h2></div>`;
+                ch.pages.forEach((p,i) => { el.innerHTML += `<div class="page"><img class="page-image" src="${p}" alt="Страница ${i+1}" onclick="openZoom('${p}')"><div class="page-number">Страница ${i+1}</div></div>`; });
+            } else if (hasTimer) {
+                el.innerHTML = `<div class="chapter-header"><h2 class="chapter-title">${ch.title}</h2><div class="release-info"><div>Скоро ближайший выход:</div><div class="countdown" id="countdown">${fmt(ch.releaseDate)}</div></div></div>`;
             } else {
-                content.innerHTML = `<div class="chapter-header"><h2 class="chapter-title">${chapter.title}</h2></div>`;
-                chapter.pages.forEach((page, index) => {
-                    content.innerHTML += `
-                        <div class="page">
-                            <img class="page-image" src="${page}" alt="Страница ${index + 1}" onclick="openZoom('${page}')">
-                            <div class="page-number">Страница ${index + 1}</div>
-                        </div>
-                    `;
-                });
+                el.innerHTML = `<div class="chapter-header"><h2 class="chapter-title">${ch.title}</h2><div class="release-info" style="color:#888">Скоро</div></div>`;
             }
         }
 
         function updateTimers() {
             const el = document.getElementById('countdown');
-            if (el && volumes[currentVolume].chapters[currentChapter].releaseDate) {
-                el.textContent = formatCountdown(volumes[currentVolume].chapters[currentChapter].releaseDate);
+            const ch = volumes[currentVolume]?.chapters[currentChapter];
+            if (el && ch?.releaseDate) {
+                const timerActive = new Date(ch.releaseDate) > new Date();
+                if (!timerActive && ch.pages?.length) showChapter(currentChapter);
+                else el.textContent = fmt(ch.releaseDate);
             }
             document.querySelectorAll('.chapter-btn').forEach(btn => {
                 const num = btn.dataset.chapter;
                 const ch = volumes[currentVolume].chapters[num];
+                const timerActive = ch.releaseDate && new Date(ch.releaseDate) > new Date();
                 const timerEl = btn.querySelector('.timer');
-                if (timerEl && ch.releaseDate) timerEl.textContent = formatCountdown(ch.releaseDate);
+                if (ch.releaseDate) {
+                    if (timerActive) {
+                        btn.classList.add('locked');
+                        if (!timerEl) btn.innerHTML += `<span class="timer">${fmt(ch.releaseDate)}</span>`;
+                        else timerEl.textContent = fmt(ch.releaseDate);
+                    } else {
+                        btn.classList.remove('locked');
+                        if (timerEl) timerEl.remove();
+                    }
+                }
             });
         }
 
-        function openZoom(src) {
-            document.getElementById('zoomImage').src = src;
-            document.getElementById('zoomOverlay').classList.add('active');
-            document.body.style.overflow = 'hidden';
-        }
+        function openZoom(src) { document.getElementById('zoomImage').src = src; document.getElementById('zoomOverlay').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeZoom() { document.getElementById('zoomOverlay').classList.remove('active'); document.body.style.overflow = ''; }
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeZoom(); });
 
-        function closeZoom() {
-            document.getElementById('zoomOverlay').classList.remove('active');
-            document.body.style.overflow = '';
-        }
-
-        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeZoom(); });
-
-        function init() {
-            const container = document.getElementById("volumes");
-            Object.keys(volumes).sort((a,b) => a-b).forEach(num => {
-                container.innerHTML += `<button class="volume-btn" data-vol="${num}" onclick="showVolume(${num})">${volumes[num].title}</button>`;
-            });
-            showVolume(1);
+        async function init() {
+            try {
+                const resp = await fetch('chapters.json');
+                volumes = await resp.json();
+            } catch(e) { volumes = { "1": { title: "Том 1", chapters: { "1": { title: "Глава 1", pages: ["Glava1/1.png"] } } } }; }
+            const c = document.getElementById('volumes');
+            Object.keys(volumes).sort((a,b)=>a-b).forEach(v => { c.innerHTML += `<button class="volume-btn" data-vol="${v}" onclick="showVolume(${v})">${volumes[v].title}</button>`; });
+            showVolume(Object.keys(volumes).sort((a,b)=>a-b)[0]);
             setInterval(updateTimers, 1000);
             updateTimers();
         }
-
         init();
     </script>
 </body>

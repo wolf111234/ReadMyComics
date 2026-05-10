@@ -7,7 +7,7 @@
   content="width=device-width, initial-scale=1.0, viewport-fit=cover"
 />
 
-<title>Серия моего шуточного комикса: Глубокая Карта</title>
+<title>Карта глубин</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link
@@ -592,13 +592,13 @@ body{
   <aside class="sidebar" id="sidebar">
 
     <div class="brand">
-      комикс: Глубокая Карта
+      Карта глубин
     </div>
 
     <a
       class="download-btn"
-      href="KartaGlubin.apk"
-      download
+      href="Comics - Глубокая Карта.apk"
+      download="Comics - Глубокая Карта.apk"
     >
       📱 Скачать приложение
     </a>
@@ -1253,6 +1253,21 @@ if('serviceWorker' in navigator){
 
 /* CO-READING */
 
+const PEER_HOST = 'https://peer-server.onrender.com';
+
+const PEER_CONFIG = {
+  host: PEER_HOST.replace(/https?:\/\//, ''),
+  port: 443,
+  path: '/peerjs',
+  secure: true,
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+    ]
+  }
+};
+
 const co = {
   peer: null,
   conn: null,
@@ -1280,8 +1295,14 @@ function setCoStatus(text, ok){
 function initPeer(cb){
   if(co.peer) return cb && cb();
   setCoStatus('Подключение к серверу...');
-  co.peer = new Peer();
+  const timeout = setTimeout(() => {
+    if(!co.peer || !co.peer.id){
+      setCoStatus('❌ Таймаут: проверь интернет или VPN');
+    }
+  }, 15000);
+  co.peer = new Peer(undefined, PEER_CONFIG);
   co.peer.on('open', id => {
+    clearTimeout(timeout);
     co.roomId = id;
     cb && cb();
   });
@@ -1302,9 +1323,13 @@ function initPeer(cb){
     call.on('stream', remoteStream => {
       if(!co.audioEl){
         co.audioEl = document.createElement('audio');
+        co.audioEl.playsInline = true;
         co.audioEl.autoplay = true;
         co.audioEl.style.display = 'none';
         document.body.appendChild(co.audioEl);
+        document.addEventListener('touchstart', () => {
+          if(co.audioEl) co.audioEl.play().catch(() => {});
+        }, { once: true });
       }
       co.audioEl.srcObject = remoteStream;
       co.audioEl.play().catch(() => {});
@@ -1313,6 +1338,7 @@ function initPeer(cb){
     co.call = call;
   });
   co.peer.on('error', err => {
+    clearTimeout(timeout);
     if(err.type === 'unavailable-id'){
       setCoStatus('❌ Ошибка: попробуйте ещё раз');
     }else if(err.type !== 'disconnected'){
@@ -1415,6 +1441,10 @@ function toggleMic(){
     $('coMicBtn').textContent = co.micOn ? '🎤 🟢' : '🎤 🔴';
     return;
   }
+  if(!navigator.mediaDevices?.getUserMedia){
+    setCoStatus('❌ Микрофон не работает: нужен HTTPS (не file:// или http://)');
+    return;
+  }
   navigator.mediaDevices.getUserMedia({ audio: true })
     .then(stream => {
       co.stream = stream;
@@ -1424,8 +1454,13 @@ function toggleMic(){
         co.call = co.peer.call(co.conn.peer, stream);
       }
     })
-    .catch(() => {
-      setCoStatus('❌ Нет доступа к микрофону');
+    .catch(err => {
+      const msg = err.name === 'NotAllowedError'
+        ? '❌ Нет разрешения на микрофон'
+        : err.name === 'NotFoundError'
+        ? '❌ Микрофон не найден'
+        : '❌ Ошибка микрофона: ' + (err.message || 'проверь разрешения');
+      setCoStatus(msg);
     });
 }
 

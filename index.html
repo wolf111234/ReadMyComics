@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Карта глубин</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: #0d0d0d;
+            color: #e0e0e0;
+            min-height: 100vh;
+            background-image:
+                radial-gradient(ellipse at top, #1a1a2e 0%, transparent 50%),
+                radial-gradient(ellipse at bottom, #16213e 0%, transparent 50%);
+            overflow-x: hidden;
+        }
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(180deg, rgba(13,13,13,0.97) 0%, rgba(13,13,13,0) 100%);
+            padding: 16px 40px 24px;
+            z-index: 100;
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .header.hidden {
+            transform: translateY(-100%);
+        }
+        .header.show {
+            transform: translateY(0);
+        }
+        .title {
+            font-size: 26px;
+            font-weight: 800;
+            text-align: center;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, #00d4ff 0%, #7b2cbf 50%, #ff006e 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .header-actions {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .download-btn {
+            background: linear-gradient(135deg, #00d4ff, #7b2cbf);
+            color: #fff;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .download-btn:hover { transform: scale(1.05); box-shadow: 0 0 20px rgba(0,212,255,0.4); }
+        .volumes {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .volume-btn {
+            background: rgba(255,255,255,0.05);
+            color: #aaa;
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 6px 16px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+        }
+        .volume-btn:hover {
+            background: rgba(123,44,191,0.2);
+            border-color: #7b2cbf;
+            color: #fff;
+        }
+        .volume-btn.active {
+            background: linear-gradient(135deg, #7b2cbf, #ff006e);
+            border-color: transparent;
+            color: #fff;
+        }
+        .chapters {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .chapter-btn {
+            background: rgba(255,255,255,0.05);
+            color: #aaa;
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 6px 14px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 400;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+        }
+        .chapter-btn:hover {
+            background: rgba(0,212,255,0.1);
+            border-color: #00d4ff;
+            color: #fff;
+        }
+        .chapter-btn.active {
+            background: linear-gradient(135deg, #00d4ff, #7b2cbf);
+            border-color: transparent;
+            color: #fff;
+            font-weight: 600;
+        }
+        .chapter-btn.locked {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .timer {
+            font-size: 10px;
+            background: rgba(255,0,100,0.2);
+            padding: 2px 6px;
+            border-radius: 10px;
+            color: #ff006e;
+            margin-left: 4px;
+            font-weight: 600;
+        }
+        .content {
+            max-width: 700px;
+            margin: 0 auto;
+            padding: 140px 20px 60px;
+        }
+        .chapter-header { text-align: center; margin-bottom: 30px; }
+        .chapter-title { font-size: 22px; color: #00d4ff; font-weight: 300; letter-spacing: 3px; }
+        .release-info { margin-top: 15px; color: #ff006e; font-size: 14px; }
+        .countdown { font-size: 22px; font-weight: 700; margin-top: 8px; letter-spacing: 2px; }
+        .page {
+            margin-bottom: 20px;
+            opacity: 0;
+            transform: translateY(24px);
+            animation: fadeIn 0.6s ease forwards;
+        }
+        .page:nth-child(2) { animation-delay: 0.1s; }
+        .page:nth-child(3) { animation-delay: 0.2s; }
+        .page:nth-child(4) { animation-delay: 0.3s; }
+        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+        .page-image {
+            width: 100%;
+            display: block;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            cursor: zoom-in;
+        }
+        .page-image:hover { box-shadow: 0 15px 50px rgba(0,212,255,0.15); }
+        .page-number { text-align: center; color: #555; font-size: 12px; margin-top: 8px; letter-spacing: 1px; }
+        .zoom-overlay {
+            display: none; position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.95); z-index: 200; overflow: auto;
+        }
+        .zoom-overlay.active { display: block; }
+        .zoom-container { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; }
+        .zoom-image { max-width: 100%; cursor: move; }
+        .close-zoom {
+            position: fixed; top: 20px; right: 20px;
+            background: rgba(255,0,0,0.3); color: #fff; border: none;
+            padding: 10px 20px; cursor: pointer; border-radius: 25px; font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="header" id="header">
+        <h1 class="title">Карта глубин</h1>
+        <div class="header-actions">
+            <a class="download-btn" href="KartaGlubin.apk" download>📱 Скачать приложение</a>
+        </div>
+        <div class="volumes" id="volumes"></div>
+        <div class="chapters" id="chapters"></div>
+    </div>
+    <div class="content" id="content"></div>
+    <div class="zoom-overlay" id="zoomOverlay">
+        <button class="close-zoom" onclick="closeZoom()">✕ Закрыть</button>
+        <div class="zoom-container">
+            <img class="zoom-image" id="zoomImage" src="" alt="">
+        </div>
+    </div>
+
+    <script>
+        let volumes = {};
+        let currentVolume, currentChapter;
+        let lastScroll = 0;
+        let headerVisible = true;
+
+        window.addEventListener('scroll', () => {
+            const s = window.pageYOffset;
+            const h = document.getElementById('header');
+            if (s > 80 && s > lastScroll && headerVisible) { h.classList.add('hidden'); h.classList.remove('show'); headerVisible = false; }
+            else if ((s < lastScroll || s < 80) && !headerVisible) { h.classList.remove('hidden'); h.classList.add('show'); headerVisible = true; }
+            lastScroll = s;
+        });
+
+        function getRemaining(d) { const n = new Date(), r = new Date(d), diff = r - n; if (diff <= 0) return null; return { days: Math.floor(diff/864e5), hours: Math.floor((diff%864e5)/36e5), mins: Math.floor((diff%36e5)/6e4), secs: Math.floor((diff%6e4)/1e3) }; }
+
+        function fmt(d) { const r = getRemaining(d); if (!r) return 'Доступно!'; return r.days+'д '+r.hours+'ч '+r.mins+'м '+r.secs+'с'; }
+
+        function showVolume(vn) {
+            currentVolume = vn;
+            document.querySelectorAll('.volume-btn').forEach(b => b.classList.toggle('active', b.dataset.vol == vn));
+            const vol = volumes[vn];
+            const c = document.getElementById('chapters'); c.innerHTML = '';
+            Object.keys(vol.chapters).sort((a,b)=>a-b).forEach(chNum => {
+                const ch = vol.chapters[chNum];
+                const hasPages = ch.pages && ch.pages.length;
+                const hasTimer = ch.releaseDate;
+                const timerActive = hasTimer && new Date(ch.releaseDate) > new Date();
+                let cls = 'chapter-btn';
+                let timerHtml = '';
+                if (timerActive) { cls += ' locked'; timerHtml = `<span class="timer">${fmt(ch.releaseDate)}</span>`; }
+                c.innerHTML += `<button class="${cls}" data-chapter="${chNum}" onclick="showChapter(${chNum})">Глава ${chNum}${timerHtml}</button>`;
+            });
+            const keys = Object.keys(vol.chapters).sort((a,b)=>a-b);
+            showChapter(keys[0]);
+        }
+
+        function showChapter(chNum) {
+            currentChapter = chNum;
+            document.querySelectorAll('.chapter-btn').forEach(b => b.classList.toggle('active', b.dataset.chapter == chNum));
+            const ch = volumes[currentVolume].chapters[chNum];
+            const hasPages = ch.pages && ch.pages.length;
+            const hasTimer = ch.releaseDate;
+            const timerActive = hasTimer && new Date(ch.releaseDate) > new Date();
+            const el = document.getElementById('content');
+            if (hasPages && !timerActive) {
+                el.innerHTML = `<div class="chapter-header"><h2 class="chapter-title">${ch.title}</h2></div>`;
+                ch.pages.forEach((p,i) => { el.innerHTML += `<div class="page"><img class="page-image" src="${p}" alt="Страница ${i+1}" onclick="openZoom('${p}')"><div class="page-number">Страница ${i+1}</div></div>`; });
+            } else if (hasTimer) {
+                el.innerHTML = `<div class="chapter-header"><h2 class="chapter-title">${ch.title}</h2><div class="release-info"><div>Скоро ближайший выход:</div><div class="countdown" id="countdown">${fmt(ch.releaseDate)}</div></div></div>`;
+            } else {
+                el.innerHTML = `<div class="chapter-header"><h2 class="chapter-title">${ch.title}</h2><div class="release-info" style="color:#888">Скоро</div></div>`;
+            }
+        }
+
+        function updateTimers() {
+            const el = document.getElementById('countdown');
+            const ch = volumes[currentVolume]?.chapters[currentChapter];
+            if (el && ch?.releaseDate) {
+                const timerActive = new Date(ch.releaseDate) > new Date();
+                if (!timerActive && ch.pages?.length) showChapter(currentChapter);
+                else el.textContent = fmt(ch.releaseDate);
+            }
+            document.querySelectorAll('.chapter-btn').forEach(btn => {
+                const num = btn.dataset.chapter;
+                const ch = volumes[currentVolume].chapters[num];
+                const timerActive = ch.releaseDate && new Date(ch.releaseDate) > new Date();
+                const timerEl = btn.querySelector('.timer');
+                if (ch.releaseDate) {
+                    if (timerActive) {
+                        btn.classList.add('locked');
+                        if (!timerEl) btn.innerHTML += `<span class="timer">${fmt(ch.releaseDate)}</span>`;
+                        else timerEl.textContent = fmt(ch.releaseDate);
+                    } else {
+                        btn.classList.remove('locked');
+                        if (timerEl) timerEl.remove();
+                    }
+                }
+            });
+        }
+
+        function openZoom(src) { document.getElementById('zoomImage').src = src; document.getElementById('zoomOverlay').classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeZoom() { document.getElementById('zoomOverlay').classList.remove('active'); document.body.style.overflow = ''; }
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeZoom(); });
+
+        async function init() {
+            try {
+                const resp = await fetch('chapters.json');
+                volumes = await resp.json();
+            } catch(e) { volumes = { "1": { title: "Том 1", chapters: { "1": { title: "Глава 1", pages: ["Glava1/1.png"] } } } }; }
+            const c = document.getElementById('volumes');
+            Object.keys(volumes).sort((a,b)=>a-b).forEach(v => { c.innerHTML += `<button class="volume-btn" data-vol="${v}" onclick="showVolume(${v})">${volumes[v].title}</button>`; });
+            showVolume(Object.keys(volumes).sort((a,b)=>a-b)[0]);
+            setInterval(updateTimers, 1000);
+            updateTimers();
+        }
+        init();
+    </script>
+</body>
+</html>

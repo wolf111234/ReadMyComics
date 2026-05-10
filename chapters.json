@@ -1,0 +1,9 @@
+{
+  "1": {
+    "title": "Том 1",
+    "chapters": {
+      "1": { "title": "Глава 1", "pages": ["Glava1/1.png", "Glava1/2.png", "Glava1/3.png"] },
+      "2": { "title": "Глава 2", "pages": ["Glava2/1.png","Glava2/2.png","Glava2/3.png","Glava2/4.png"], "releaseDate": "2026-05-10T11:15:00" }
+    }
+  }
+}

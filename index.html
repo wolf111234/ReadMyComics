@@ -15,7 +15,6 @@
   rel="stylesheet"
 />
 
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
 
 
 <style>
@@ -82,6 +81,35 @@ body{
   background:linear-gradient(135deg,var(--accent),var(--accent2));
   -webkit-background-clip:text;
   -webkit-text-fill-color:transparent;
+}
+
+.tabs{
+  display:flex;
+  gap:8px;
+  margin-bottom:18px;
+}
+
+.tab-btn{
+  flex:1;
+  padding:12px;
+  border:none;
+  outline:none;
+  cursor:pointer;
+  border-radius:14px;
+  background:#ffffff08;
+  color:var(--muted);
+  font-weight:600;
+  font-size:13px;
+  transition:.25s;
+}
+
+.tab-btn.active{
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  color:white;
+}
+
+.tab-btn:hover:not(.active){
+  background:#ffffff15;
 }
 
 .download-btn{
@@ -603,23 +631,31 @@ body{
       📱 Скачать приложение
     </a>
 
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="volumes" onclick="switchTab('volumes')">📖 Тома</button>
+      <button class="tab-btn" data-tab="theories" onclick="switchTab('theories')">📜 Теории</button>
+    </div>
+
     <input
       class="search"
       id="search"
       placeholder="Поиск главы..."
     >
 
-    <div class="section-title">
-      Тома
+    <div id="volumesSection">
+      <div class="section-title">Тома</div>
+      <div id="volumes"></div>
+      <div class="section-title">Главы</div>
+      <div id="chapters"></div>
     </div>
 
-    <div id="volumes"></div>
-
-    <div class="section-title">
-      Главы
+    <div id="theoriesSection" style="display:none">
+      <div class="section-title">Теории</div>
+      <a class="download-btn" href="https://github.com/wolf111234/ReadMyComics/issues/new?assignees=&labels=theory&projects=&template=theory.yml" target="_blank" style="margin-bottom:12px;font-size:13px;padding:10px">
+        ✏️ Предложить теорию
+      </a>
+      <div id="theoriesList"></div>
     </div>
-
-    <div id="chapters"></div>
 
   </aside>
 
@@ -638,10 +674,6 @@ body{
       </div>
 
       <div class="actions">
-
-        <button class="btn" onclick="toggleCoPanel()" id="coBtn">
-          👥
-        </button>
 
         <button class="btn" onclick="toggleFullscreen()">
           ⛶
@@ -684,31 +716,6 @@ body{
 
   <img id="zoomImg">
 
-</div>
-
-<!-- CO-READING -->
-
-<div class="co-panel" id="coPanel">
-  <div class="co-section" id="coJoinSection">
-    <div class="co-room">
-      <input id="coRoomInput" placeholder="ID комнаты..." class="co-input">
-      <button class="btn co-action" onclick="joinRoom()">Войти</button>
-    </div>
-    <button class="btn co-action co-create" onclick="createRoom()">
-      ✨ Создать комнату
-    </button>
-  </div>
-  <div class="co-section" id="coConnectedSection" style="display:none">
-    <div class="co-room">
-      <input id="coShareInput" readonly class="co-input">
-      <button class="btn co-action" onclick="copyRoomLink()">📋</button>
-    </div>
-    <div class="co-room">
-      <button class="btn co-action" onclick="toggleMic()" id="coMicBtn">🎤 Микрофон</button>
-      <button class="btn co-action" onclick="disconnectRoom()">🚪 Выйти</button>
-    </div>
-  </div>
-  <div class="co-status" id="coStatus">Не подключено</div>
 </div>
 
 <script>
@@ -1160,7 +1167,11 @@ $('search').addEventListener('input',e=>{
 
   const q = e.target.value.toLowerCase();
 
-  document.querySelectorAll('.chapter-btn')
+  const sel = currentTab === 'volumes'
+    ? '#chapters .chapter-btn'
+    : '#theoriesList .chapter-btn';
+
+  document.querySelectorAll(sel)
     .forEach(btn=>{
 
       btn.style.display =
@@ -1251,266 +1262,85 @@ if('serviceWorker' in navigator){
 
 }
 
-/* CO-READING */
+/* THEORIES */
 
-const PEER_HOST = 'https://readmycomics.onrender.com';
+let theoriesData = {};
+let currentTheory = null;
+let currentTab = 'volumes';
 
-const PEER_CONFIG = {
-  host: PEER_HOST.replace(/https?:\/\//, ''),
-  port: 443,
-  path: '/peerjs',
-  secure: true,
-  config: {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-    ]
+async function loadTheories(){
+  try{
+    const res = await fetch('https://api.github.com/repos/wolf111234/ReadMyComics/issues?labels=theory&state=open&sort=created&direction=desc', { signal: AbortSignal.timeout(5000) });
+    if(res.ok){
+      const issues = await res.json();
+      theoriesData = {};
+      issues.forEach(issue => {
+        theoriesData[issue.number] = {
+          title: issue.title.replace('[Теория] ',''),
+          content: issue.body || 'Нет текста',
+          url: issue.html_url
+        };
+      });
+      return;
+    }
+  }catch{}
+  try{
+    theoriesData = await (await fetch('theories.json')).json();
+  }catch{
+    theoriesData = {};
   }
-};
-
-const co = {
-  peer: null,
-  conn: null,
-  call: null,
-  stream: null,
-  audioEl: null,
-  roomId: null,
-  connected: false,
-  micOn: false,
-  isHost: false,
-  syncing: false,
-  scrollTimer: null
-};
-
-function toggleCoPanel(){
-  $('coPanel').classList.toggle('show');
 }
 
-function setCoStatus(text, ok){
-  const el = $('coStatus');
-  el.textContent = text;
-  el.classList.toggle('connected', ok);
-}
-
-function initPeer(cb){
-  if(co.peer) return cb && cb();
-  setCoStatus('Подключение к серверу...');
-  const timeout = setTimeout(() => {
-    if(!co.peer || !co.peer.id){
-      setCoStatus('❌ Таймаут: проверь интернет или VPN');
-    }
-  }, 15000);
-  co.peer = new Peer(undefined, PEER_CONFIG);
-  co.peer.on('open', id => {
-    clearTimeout(timeout);
-    co.roomId = id;
-    cb && cb();
-  });
-  co.peer.on('connection', conn => {
-    co.conn = conn;
-    co.connected = true;
-    co.isHost = true;
-    conn.on('data', handleCoData);
-    conn.on('close', onDisconnect);
-    setCoStatus('✅ Зритель подключился!', true);
-    broadcastState();
-    if(co.stream && co.micOn){
-      co.call = co.peer.call(conn.peer, co.stream);
-    }
-  });
-  co.peer.on('call', call => {
-    call.answer();
-    call.on('stream', remoteStream => {
-      if(!co.audioEl){
-        co.audioEl = document.createElement('audio');
-        co.audioEl.playsInline = true;
-        co.audioEl.autoplay = true;
-        co.audioEl.style.display = 'none';
-        document.body.appendChild(co.audioEl);
-        document.addEventListener('touchstart', () => {
-          if(co.audioEl) co.audioEl.play().catch(() => {});
-        }, { once: true });
-      }
-      co.audioEl.srcObject = remoteStream;
-      co.audioEl.play().catch(() => {});
-    });
-    call.on('close', () => { co.call = null; });
-    co.call = call;
-  });
-  co.peer.on('error', err => {
-    clearTimeout(timeout);
-    if(err.type === 'unavailable-id'){
-      setCoStatus('❌ Ошибка: попробуйте ещё раз');
-    }else if(err.type !== 'disconnected'){
-      setCoStatus('Ошибка: ' + (err.message || err.type));
-    }
-  });
-}
-
-function broadcastState(){
-  if(!co.conn || !co.conn.open) return;
-  co.conn.send({ type: 'page', chapter: state.chapter });
-  setTimeout(() => {
-    if(co.conn && co.conn.open){
-      co.conn.send({ type: 'scroll', scrollTop: $('reader').scrollTop });
-    }
-  }, 200);
-}
-
-function createRoom(){
-  setCoStatus('Создание комнаты...');
-  initPeer(() => {
-    $('coJoinSection').style.display = 'none';
-    $('coConnectedSection').style.display = 'block';
-    const link = window.location.origin + window.location.pathname.replace(/\/?$/, '/') + '?room=' + co.peer.id;
-    $('coShareInput').value = link;
-    setCoStatus('✅ Вы ведущий! Отправьте ссылку друзьям', true);
-    $('coBtn').classList.add('active');
-    co.isHost = true;
-  });
-}
-
-function joinRoom(){
-  const id = $('coRoomInput').value.trim();
-  if(!id) return;
-  setCoStatus('Подключение...');
-  initPeer(() => {
-    co.conn = co.peer.connect(id, { reliable: true });
-    co.conn.on('open', () => {
-      co.connected = true;
-      co.isHost = false;
-      $('coJoinSection').style.display = 'none';
-      $('coConnectedSection').style.display = 'block';
-      $('coShareInput').value = 'Комната: ' + id;
-      setCoStatus('✅ Подключено к ведущему', true);
-      $('coBtn').classList.add('active');
-    });
-    co.conn.on('data', handleCoData);
-    co.conn.on('close', onDisconnect);
-  });
-}
-
-function handleCoData(data){
-  co.syncing = true;
-  switch(data.type){
-    case 'page':
-      openChapter(data.chapter);
-      break;
-    case 'scroll':
-      $('reader').scrollTop = data.scrollTop;
-      break;
-    case 'zoom':
-      openZoom(data.src);
-      break;
+function switchTab(tab){
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  $('volumesSection').style.display = 'none';
+  $('theoriesSection').style.display = 'none';
+  $('search').value = '';
+  if(tab === 'volumes'){
+    $('search').placeholder = 'Поиск главы...';
+    $('volumesSection').style.display = 'block';
+    document.querySelectorAll('#chapters .chapter-btn').forEach(b => b.style.display = 'block');
+  }else{
+    $('search').placeholder = 'Поиск теории...';
+    $('theoriesSection').style.display = 'block';
+    renderTheories();
   }
-  clearTimeout(co.scrollTimer);
-  co.scrollTimer = setTimeout(() => { co.syncing = false; }, 100);
 }
 
-function onDisconnect(){
-  disconnectRoom();
-}
-
-function disconnectRoom(){
-  if(co.conn && co.conn.open) co.conn.close();
-  if(co.call && co.call.open) co.call.close();
-  if(co.stream) co.stream.getTracks().forEach(t => t.stop());
-  if(co.audioEl){
-    co.audioEl.pause();
-    co.audioEl.srcObject = null;
-    co.audioEl.remove();
-  }
-  co.conn = null;
-  co.call = null;
-  co.stream = null;
-  co.audioEl = null;
-  co.connected = false;
-  co.micOn = false;
-  co.isHost = false;
-  $('coJoinSection').style.display = 'block';
-  $('coConnectedSection').style.display = 'none';
-  setCoStatus('Отключено');
-  $('coBtn').classList.remove('active');
-  $('coPanel').classList.remove('show');
-}
-
-function toggleMic(){
-  if(co.call && co.call.open && co.stream){
-    co.micOn = !co.micOn;
-    co.stream.getAudioTracks().forEach(t => t.enabled = co.micOn);
-    $('coMicBtn').textContent = co.micOn ? '🎤 🟢' : '🎤 🔴';
+function renderTheories(){
+  $('theoriesList').innerHTML = '';
+  const ids = Object.keys(theoriesData).sort((a,b) => b - a);
+  if(ids.length === 0){
+    $('theoriesList').innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px">Пока нет теорий</div>';
     return;
   }
-  if(!navigator.mediaDevices?.getUserMedia){
-    setCoStatus('❌ Микрофон не работает: нужен HTTPS (не file:// или http://)');
-    return;
-  }
-  navigator.mediaDevices.getUserMedia({ audio: true })
-    .then(stream => {
-      co.stream = stream;
-      co.micOn = true;
-      $('coMicBtn').textContent = '🎤 🟢';
-      if(co.connected && co.conn && co.conn.open){
-        co.call = co.peer.call(co.conn.peer, stream);
-      }
-    })
-    .catch(err => {
-      const msg = err.name === 'NotAllowedError'
-        ? '❌ Нет разрешения на микрофон'
-        : err.name === 'NotFoundError'
-        ? '❌ Микрофон не найден'
-        : '❌ Ошибка микрофона: ' + (err.message || 'проверь разрешения');
-      setCoStatus(msg);
-    });
+  ids.forEach(id => {
+    const t = theoriesData[id];
+    const btn = document.createElement('button');
+    btn.className = 'chapter-btn';
+    if(id == currentTheory) btn.classList.add('active');
+    btn.innerHTML = `<div>${t.title}</div>`;
+    btn.onclick = () => { openTheory(id); closeSidebar(); };
+    $('theoriesList').appendChild(btn);
+  });
 }
 
-function copyRoomLink(){
-  const input = $('coShareInput');
-  input.select();
-  navigator.clipboard?.writeText(input.value);
-  setCoStatus('✅ Ссылка скопирована!', true);
+function openTheory(id){
+  currentTheory = id;
+  const t = theoriesData[id];
+  if(!t) return;
+  $('topTitle').textContent = t.title;
+  const reader = $('reader');
+  reader.innerHTML = `
+    <div class="chapter-header">
+      <div class="chapter-title">${t.title}</div>
+    </div>
+    <div style="max-width:750px;margin:0 auto;line-height:1.8;font-size:16px;color:var(--text);white-space:pre-wrap">${t.content}</div>
+    ${t.url ? `<div style="text-align:center;margin-top:30px"><a href="${t.url}" target="_blank" style="color:var(--accent);font-size:13px">🔗 Открыть в GitHub</a></div>` : ''}
+  `;
+  renderTheories();
 }
-
-// auto-join from URL
-(function(){
-  const params = new URLSearchParams(window.location.search);
-  const room = params.get('room');
-  if(room){
-    setTimeout(() => {
-      $('coRoomInput').value = room;
-      joinRoom();
-    }, 1500);
-  }
-})();
-
-// broadcast sync (host only)
-const _origOpenChapter = openChapter;
-openChapter = function(id){
-  _origOpenChapter(id);
-  if(co.isHost && co.connected && co.conn && co.conn.open){
-    co.conn.send({ type: 'page', chapter: id });
-  }
-};
-
-const _origOpenZoom = openZoom;
-openZoom = function(src){
-  _origOpenZoom(src);
-  if(co.isHost && co.connected && co.conn && co.conn.open){
-    co.conn.send({ type: 'zoom', src });
-  }
-};
-
-$('reader').addEventListener('scroll', (function(){
-  let last = 0;
-  return function(){
-    const now = Date.now();
-    if(now - last < 80) return;
-    last = now;
-    if(co.isHost && co.connected && co.conn && co.conn.open && !co.syncing){
-      co.conn.send({ type: 'scroll', scrollTop: $('reader').scrollTop });
-    }
-  };
-})());
 
 /* START */
 

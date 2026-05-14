@@ -633,7 +633,7 @@ body{
 
     <div class="tabs">
       <button class="tab-btn active" data-tab="volumes" onclick="switchTab('volumes')">📖 Тома</button>
-      <button class="tab-btn" data-tab="theories" onclick="switchTab('theories')">📜 Теории</button>
+      <button class="tab-btn" data-tab="theories" onclick="switchTab('theories')">📬 Ответы автора</button>
     </div>
 
     <input
@@ -650,9 +650,9 @@ body{
     </div>
 
     <div id="theoriesSection" style="display:none">
-      <div class="section-title">Теории</div>
-      <a class="download-btn" href="https://github.com/wolf111234/ReadMyComics/issues/new?assignees=&labels=theory&projects=&template=theory.yml" target="_blank" style="margin-bottom:12px;font-size:13px;padding:10px">
-        ✏️ Предложить теорию
+      <div class="section-title">Ответы автора</div>
+      <a class="download-btn" href="https://github.com/wolf111234/ReadMyComics/issues/new?assignees=&labels=question&projects=&template=question.yml" target="_blank" style="margin-bottom:12px;font-size:13px;padding:10px">
+        ✏️ Задать вопрос
       </a>
       <div id="theoriesList"></div>
     </div>
@@ -1270,25 +1270,24 @@ let currentTab = 'volumes';
 
 async function loadTheories(){
   try{
-    const res = await fetch('https://api.github.com/repos/wolf111234/ReadMyComics/issues?labels=theory&state=open&sort=created&direction=desc', { signal: AbortSignal.timeout(5000) });
+    const res = await fetch('https://api.github.com/repos/wolf111234/ReadMyComics/issues?labels=answer&state=all&sort=updated&direction=desc', { signal: AbortSignal.timeout(5000) });
     if(res.ok){
       const issues = await res.json();
       theoriesData = {};
       issues.forEach(issue => {
         theoriesData[issue.number] = {
-          title: issue.title.replace('[Теория] ',''),
-          content: issue.body || 'Нет текста',
+          title: issue.title.replace('[Вопрос] ',''),
+          content: issue.body || '',
           url: issue.html_url
         };
       });
+      renderTheories();
       return;
     }
   }catch{}
-  try{
-    theoriesData = await (await fetch('theories.json')).json();
-  }catch{
-    theoriesData = {};
-  }
+  // fallback: show link to issues
+  theoriesData = {};
+  renderTheories();
 }
 
 function switchTab(tab){
@@ -1302,9 +1301,12 @@ function switchTab(tab){
     $('volumesSection').style.display = 'block';
     document.querySelectorAll('#chapters .chapter-btn').forEach(b => b.style.display = 'block');
   }else{
-    $('search').placeholder = 'Поиск теории...';
+    $('search').placeholder = 'Поиск ответов...';
     $('theoriesSection').style.display = 'block';
-    renderTheories();
+    if(Object.keys(theoriesData).length === 0){
+      $('theoriesList').innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px">Загрузка...</div>';
+    }
+    loadTheories();
   }
 }
 
@@ -1312,9 +1314,19 @@ function renderTheories(){
   $('theoriesList').innerHTML = '';
   const ids = Object.keys(theoriesData).sort((a,b) => b - a);
   if(ids.length === 0){
-    $('theoriesList').innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px">Пока нет теорий</div>';
+    $('theoriesList').innerHTML = `
+      <div style="color:var(--muted);text-align:center;padding:20px">Пока нет ответов</div>
+      <a href="https://github.com/wolf111234/ReadMyComics/issues?q=label%3Aanswer" target="_blank" class="chapter-btn" style="display:block;text-align:center;text-decoration:none">📬 Все вопросы и ответы на GitHub</a>
+    `;
     return;
   }
+  const allLink = document.createElement('a');
+  allLink.href = 'https://github.com/wolf111234/ReadMyComics/issues?q=label%3Aanswer';
+  allLink.target = '_blank';
+  allLink.className = 'chapter-btn';
+  allLink.style.cssText = 'display:block;text-align:center;text-decoration:none;margin-bottom:10px';
+  allLink.textContent = '📬 Все на GitHub';
+  $('theoriesList').appendChild(allLink);
   ids.forEach(id => {
     const t = theoriesData[id];
     const btn = document.createElement('button');
@@ -1336,8 +1348,10 @@ function openTheory(id){
     <div class="chapter-header">
       <div class="chapter-title">${t.title}</div>
     </div>
-    <div style="max-width:750px;margin:0 auto;line-height:1.8;font-size:16px;color:var(--text);white-space:pre-wrap">${t.content}</div>
-    ${t.url ? `<div style="text-align:center;margin-top:30px"><a href="${t.url}" target="_blank" style="color:var(--accent);font-size:13px">🔗 Открыть в GitHub</a></div>` : ''}
+    <div style="max-width:750px;margin:0 auto;line-height:1.8;font-size:16px;color:var(--text);white-space:pre-wrap">${t.content || 'Нет текста'}</div>
+    <div style="text-align:center;margin-top:30px">
+      <a href="${t.url}" target="_blank" class="read-btn" style="display:inline-block;text-decoration:none">🔗 Открыть на GitHub</a>
+    </div>
   `;
   renderTheories();
 }

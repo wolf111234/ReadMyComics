@@ -859,9 +859,14 @@ async function init(){
 
   checkUpdate();
 
-  const first = Object.keys(state.volumes)[0];
-
-  openVolume(first);
+  const m = window.location.hash.match(/#(\d+)g(\d+)t/);
+  if(m && state.volumes[m[2]] && state.volumes[m[2]].chapters[m[1]]){
+    openVolume(m[2]);
+    openChapter(m[1]);
+  }else{
+    const first = Object.keys(state.volumes)[0];
+    openVolume(first);
+  }
 
 }
 
@@ -1007,6 +1012,14 @@ function openChapter(id){
           : 'Отметить прочитанным'
         }
 
+      </button>
+
+      <button
+        class="read-btn"
+        onclick="copyChapterLink('${state.volume}','${id}')"
+        title="Копировать ссылку"
+      >
+        🔗
       </button>
 
     </div>
@@ -1354,6 +1367,16 @@ function openTheory(id){
     </div>
   `;
   renderTheories();
+}
+
+/* SHARE */
+
+function copyChapterLink(vol, ch){
+  const url = window.location.origin + window.location.pathname + '#' + ch + 'g' + vol + 't';
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.querySelector('.chapter-meta .read-btn:last-child');
+    if(btn){ btn.textContent = '✅'; setTimeout(() => btn.textContent = '🔗', 1500); }
+  }).catch(() => {});
 }
 
 /* START */
